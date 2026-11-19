@@ -1,0 +1,485 @@
+================================================================================
+         EXPERIMENT 5: 2D TRANSFORMATIONS (OPERATOR OVERLOADING)
+                        File: assignment5.cpp
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+  1. Quick Visual Overview (How the Program Flows)
+  2. 50-Point Complete Theory Breakdown
+  3. Step-by-Step Code Explanation (Start to End + Every Attribute & Parameter)
+  4. 50 Detailed Viva Questions & Answers
+
+
+================================================================================
+SECTION 1: QUICK VISUAL OVERVIEW (EXECUTION FLOW)
+================================================================================
+
+  START (main)
+     |
+     v
+  [1] Print Console Menu:
+      1. Translation (tx=100, ty=100)  |  2. Rotation (70 deg)
+      3. Scaling (factor 2.0)          |  0. Reset (Original Square Only)
+     |
+     v
+  [2] Read local choice via cin --> Validate (if outside 0..3 -> return 0)
+     |
+     v
+  [3] Open 800x600 GLUT window --> init() sets BLACK bg + centered (-400..400,
+      -300..300) graph --> Copy local choice to global ::choice = choice
+     |
+     v
+  [4] Enter glutMainLoop() --> GLUT calls display():
+      [a] glClear(GL_COLOR_BUFFER_BIT) --> paints background BLACK
+      [b] Draw Gray X & Y axes
+      [c] Draw WHITE original square: (-50,-50), (50,-50), (50,50), (-50,50)
+      [d] Loop i = 0..3 using Point overloaded operators:
+            choice == 1 --> result[i] = original[i] + Point(100, 100)
+            choice == 2 --> result[i] = original[i] ^ 70
+            choice == 3 --> result[i] = original[i] * 2.0
+      [e] If choice != 0 --> draw GREEN result square
+      [f] glFlush() pushes image to screen
+
+
+================================================================================
+SECTION 2: 50-POINT COMPLETE THEORY BREAKDOWN
+================================================================================
+
+ 1. What Are 2D Transformations?: Mathematical operations applied to vertex
+    coordinates (x, y) to alter an object's position, orientation, or size.
+
+ 2. Vertex-Only Efficiency: Because affine transformations preserve straight
+    lines, transforming a square only requires transforming its 4 corners and
+    redrawing the edges with GL_LINE_LOOP.
+
+ 3. Three Transformations in assignment5.cpp: Translation, Rotation, Scaling.
+
+ 4. Two Other Standard 2D Transformations: Reflection (mirroring) and Shearing
+    (slanting).
+
+ 5. Rigid-Body Transformations: Translation and Rotation keep distances and
+    angles unchanged (no stretching or shrinking).
+
+ 6. Non-Rigid Transformations: Scaling and Shearing change size or angles.
+
+ 7. Translation Definition: Shifting every vertex by fixed offsets (tx, ty).
+
+ 8. Translation Formulas: x' = x + tx, y' = y + ty (operator+ in Point).
+
+ 9. Translation Vector in assignment5.cpp: tx = 100, ty = 100.
+
+10. Scaling Definition: Enlarging or shrinking an object by multiplying its
+    coordinates by scaling factors sx and sy.
+
+11. Scaling Formulas: x' = x * sx, y' = y * sy.
+
+12. Uniform Scaling: sx == sy == s (no shape distortion). assignment5.cpp
+    uses uniform scaling factor s = 2.0 via operator*(float s).
+
+13. Non-Uniform Scaling: sx != sy (stretches a square into a rectangle).
+
+14. Scaling Factor Effects:
+    --> s > 1: enlarges  |  0 < s < 1: shrinks  |  s == 1: unchanged
+    --> s < 0: reflects across origin and scales.
+
+15. Origin-Centered Scaling: x' = x * s scales relative to (0, 0). Because our
+    square is centered at (0, 0) from -50 to +50, it expands symmetrically in
+    place without drifting.
+
+16. Fixed-Point Scaling: To scale around an arbitrary point (xf, yf), apply
+    Translate(-xf, -yf) -> Scale -> Translate(+xf, +yf).
+
+17. Rotation Definition: Turning every vertex around a pivot (here origin) by
+    an angle theta.
+
+18. Angle Sign Convention: Positive angle = Counter-Clockwise (CCW); negative
+    angle = Clockwise (CW).
+
+19. Rotation Formulas (CCW About Origin):
+    --> x' = x * cos(rad) - y * sin(rad)
+    --> y' = x * sin(rad) + y * cos(rad)
+
+20. Why Degrees Are Passed & Converted to Radians: Humans easily read degrees
+    (70 deg), whereas C++ <cmath> sin() and cos() strictly expect radians. So
+    operator^ converts via rad = angle * 3.14159 / 180.0 right before math.
+
+21. Pivot-Point Rotation: To rotate around arbitrary pivot (xp, yp), apply
+    Translate(-xp, -yp) -> Rotate(theta) -> Translate(+xp, +yp).
+
+22. Why Homogeneous Coordinates Are Needed: In 2D (x, y), Rotation and Scaling
+    are 2x2 matrix multiplications while Translation is vector addition.
+    Upgrading to 3D homogeneous vectors [x, y, 1]^T turns ALL transformations
+    into 3x3 matrix multiplications.
+
+23. 3x3 Homogeneous Matrices:
+    Translation T:        Scaling S:           Rotation R:
+    [ 1   0   tx ]        [ sx  0   0 ]        [ cos  -sin  0 ]
+    [ 0   1   ty ]        [ 0   sy  0 ]        [ sin   cos  0 ]
+    [ 0   0   1  ]        [ 0   0   1 ]        [  0     0   1 ]
+
+24. Composite Transformations: Multiplying multiple 3x3 matrices into one
+    matrix M = M3 * M2 * M1 lets you apply a full chain of transforms at once.
+
+25. Order Matters (Non-Commutative): In general A * B != B * A (Translate then
+    Rotate orbits the origin; Rotate then Translate spins in place then moves).
+
+26. Commutative Pairs: Two translations, two rotations about the same pivot,
+    two scalings about the same point, and uniform scaling with rotation.
+
+27. Inverse Transformations:
+    --> T^-1(tx, ty) = T(-tx, -ty)
+    --> R^-1(theta)  = R(-theta)
+    --> S^-1(sx, sy) = S(1/sx, 1/sy)
+
+28. Reflection Formulas: Across X-axis (x, -y); across Y-axis (-x, y); across
+    origin (-x, -y); across y = x (y, x).
+
+29. Shearing Formulas: X-shear (x + shx*y, y); Y-shear (x, y + shy*x).
+
+30. Operator Overloading in C++: Compile-time (static) polymorphism that lets
+    standard operators (+, *, ^) work directly on custom class Point objects.
+
+31. Overloaded Operators in assignment5.cpp:
+    --> operator+(Point p)     : Translation
+    --> operator*(float s)     : Uniform Scaling
+    --> operator^(float angle) : Rotation in degrees
+
+32. Why ^ Was Chosen for Rotation: C++ does not allow inventing new symbols,
+    so bitwise XOR (^) was repurposed cleanly for point rotation.
+
+33. Operator Precedence Caution: ^ has lower precedence than + and * in C++;
+    when combining operators, always use parentheses around rotations.
+
+34. Non-Overloadable C++ Operators: ::, ., .*, ?:, sizeof, typeid.
+
+35. Default Constructor Arguments: Point(float a = 0, float b = 0) works both
+    for Point(-50, -50) AND as a 0-arg default constructor needed by
+    Point result[4];.
+
+36. Variable Shadowing & Scope Resolution (::): main() declares a local
+    "int choice;" that hides global "int choice = 0;". Writing "::choice =
+    choice;" copies the local input into global ::choice so display() sees it!
+
+37. Original Square Geometry: Vertices (-50,-50), (50,-50), (50,50), (-50,50);
+    side length = 100, area = 10,000, centered at (0, 0).
+
+38. Numerical Example 1 - Translation (100, 100):
+    (-50,-50)->(50,50), (50,-50)->(150,50), (50,50)->(150,150), (-50,50)->(50,150).
+
+39. Numerical Example 2 - Scaling (2.0):
+    (-50,-50)->(-100,-100), (50,-50)->(100,-100), (50,50)->(100,100),
+    (-50,50)->(-100,100). Side doubles to 200; area quadruples to 40,000.
+
+40. Numerical Example 3 - Rotation (70 deg):
+    rad = 70 * 3.14159 / 180 = 1.22173 rad; cos(70) = 0.3420, sin(70) = 0.9397.
+    Vertex (50, 50) -> x' = 50(0.3420) - 50(0.9397) = -29.88,
+                       y' = 50(0.9397) + 50(0.3420) =  64.08.
+
+41. Non-Destructive Operators: Every operator returns a NEW Point assigned to
+    result[i], leaving original[i] intact so both squares display together.
+
+42. Visual Color Coding: Black background (0,0,0,1), Gray axes (0.5,0.5,0.5),
+    White original square (1,1,1), Green transformed square (0,1,0).
+
+43. Why Wireframe GL_LINE_LOOP Is Used: Allows you to see the white original
+    square, gray axes, and green transformed square overlapping simultaneously.
+
+44. Why float Coordinates & glVertex2f Are Used: Rotation produces decimals
+    like -29.88; using int would truncate decimals and deform the square.
+
+45. Centered Coordinate System: gluOrtho2D(-400, 400, -300, 300) puts (0, 0)
+    at the centre of the 800 x 600 window.
+
+46. User-Defined init() Function: Called once after glutCreateWindow() to set
+    the black background and centered projection cleanly outside main().
+
+47. Invalid Input Handling: Entering anything outside 0..3 prints "Invalid
+    Choice!" and returns 0 cleanly without opening a GLUT window.
+
+48. Reset Choice (choice == 0): Skips drawing the green square ("if(choice!=0)")
+    so only the white original square and gray axes appear.
+
+49. Time & Space Complexity: O(N) time and O(N) space for N vertices (here
+    N = 4, constant time).
+
+50. Real-World Uses: Game engine Transform components (Position, Rotation,
+    Scale), CAD tools, UI animations, and robotics kinematics.
+
+
+================================================================================
+SECTION 3: STEP-BY-STEP CODE EXPLANATION (START TO END)
+================================================================================
+
+--------------------------------------------------------------------------------
+STEP 1: HEADERS & NAMESPACE (Lines 1 - 4)
+--------------------------------------------------------------------------------
+  #include <GL/glut.h> --> OpenGL, GLU, and GLUT library APIs.
+  #include <iostream>  --> Console menu output (cout) and input (cin).
+  #include <cmath>     --> sin() and cos() functions for rotation.
+  using namespace std;
+
+--------------------------------------------------------------------------------
+STEP 2: class Point & OVERLOADED OPERATORS (Lines 6 - 41)
+--------------------------------------------------------------------------------
+  public: float x, y; --> Public float coordinates of a 2D vertex.
+
+  Point(float a = 0, float b = 0) { x = a; y = b; }
+    --> Constructor with default 0 values so both Point(-50, -50) and the
+        uninitialized array "Point result[4];" compile cleanly.
+
+  Point operator+(Point p) { return Point(x + p.x, y + p.y); }
+    --> Translation: adds shift vector (p.x, p.y) and returns a new Point.
+
+  Point operator*(float s) { return Point(x * s, y * s); }
+    --> Uniform Scaling: multiplies both x and y by s, returns a new Point.
+
+  Point operator^(float angle)
+    --> Rotation: takes angle in degrees (easy for humans), converts to
+        radians (rad = angle * 3.14159 / 180.0) for <cmath> sin()/cos(),
+        and returns Point(x*cos(rad) - y*sin(rad), x*sin(rad) + y*cos(rad)).
+
+--------------------------------------------------------------------------------
+STEP 3: GLOBAL ARRAYS & GLOBAL choice (Lines 44 - 53)
+--------------------------------------------------------------------------------
+  Point original[4] = { (-50,-50), (50,-50), (50,50), (-50,50) };
+  Point result[4];
+  int choice = 0;
+    --> Global so display() (which takes no parameters) can read the user's
+        menu choice and draw both squares.
+
+--------------------------------------------------------------------------------
+STEP 4: drawSquare() HELPER FUNCTION (Lines 56 - 66)
+--------------------------------------------------------------------------------
+  void drawSquare(Point p[], float r, float g, float b)
+    --> Sets color via glColor3f(r, g, b), opens GL_LINE_LOOP, emits all 4
+        vertices via glVertex2f(p[i].x, p[i].y), and closes with glEnd().
+
+--------------------------------------------------------------------------------
+STEP 5: display() CALLBACK FUNCTION (Lines 69 - 109)
+--------------------------------------------------------------------------------
+  [5.1] glClear(GL_COLOR_BUFFER_BIT); --> Wipes window to Black.
+  [5.2] Draws gray X-axis (-400..400) and Y-axis (-300..300) using GL_LINES.
+  [5.3] drawSquare(original, 1, 1, 1); --> Draws White original square.
+  [5.4] Loops i = 0..3:
+        choice == 1 --> result[i] = original[i] + Point(100, 100);
+        choice == 2 --> result[i] = original[i] ^ 70;
+        choice == 3 --> result[i] = original[i] * 2.0;
+  [5.5] If (choice != 0) drawSquare(result, 0, 1, 0); --> Green transformed box.
+  [5.6] glFlush(); --> Sends drawing immediately to single-buffered screen.
+
+--------------------------------------------------------------------------------
+STEP 6: init() & main() RUNTIME FLOW (Lines 112 - 181)
+--------------------------------------------------------------------------------
+  init():
+    --> glClearColor(0, 0, 0, 1); (opaque Black background)
+    --> gluOrtho2D(-400, 400, -300, 300); (origin (0, 0) at centre)
+
+  main():
+    [1] Declares local int choice; prints console menu; reads cin >> choice.
+    [2] Prints selected operation details; exits early (return 0) if invalid.
+    [3] Calls glutInit(&argc, argv), glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB),
+        glutInitWindowSize(800, 600), glutInitWindowPosition(100, 50),
+        glutCreateWindow("2D Transformations").
+    [4] Calls init() and registers glutDisplayFunc(display).
+    [5] ::choice = choice; --> Copies local input into global ::choice!
+    [6] Calls glutMainLoop() to open the window and render display().
+
+
+================================================================================
+SECTION 4: 50 DETAILED VIVA QUESTIONS & ANSWERS
+================================================================================
+
+Q1: What is a 2D geometric transformation?
+A: A mathematical rule applied to vertex coordinates (x, y) to move, rotate,
+   resize, reflect, or shear a 2D shape.
+
+Q2: Why do we only transform the 4 corners of the square instead of all pixels?
+A: Affine transformations preserve straight lines, so transforming the 4
+   vertices and reconnecting them with GL_LINE_LOOP yields the exact shape.
+
+Q3: Which transformations are rigid-body transformations?
+A: Translation and Rotation (and Reflection) -- they keep distances and angles
+   identical without changing the object's size or shape.
+
+Q4: Which transformations are non-rigid?
+A: Scaling and Shearing -- they change dimensions or interior angles.
+
+Q5: Write the 2D Translation equations.
+A: x' = x + tx and y' = y + ty.
+
+Q6: Write the 2D Scaling equations.
+A: x' = x * sx and y' = y * sy.
+
+Q7: What is the difference between uniform and non-uniform scaling?
+A: Uniform scaling uses sx == sy (keeps shape proportional, e.g., s = 2.0 in
+   assignment5.cpp). Non-uniform uses sx != sy (stretches/squashes).
+
+Q8: What happens when scaling factor 0 < s < 1?
+A: The object shrinks toward the origin (0, 0).
+
+Q9: What happens when scaling factor s = -1.0?
+A: (x, y) becomes (-x, -y), reflecting the object across the origin (same as
+   180-degree rotation).
+
+Q10: Write the 2D counter-clockwise Rotation equations about the origin.
+A: x' = x * cos(rad) - y * sin(rad) and y' = x * sin(rad) + y * cos(rad).
+
+Q11: How do the equations change for CLOCKWISE rotation?
+A: Replace rad with -rad: x' = x*cos(rad) + y*sin(rad),
+   y' = -x*sin(rad) + y*cos(rad).
+
+Q12: Why do we pass degrees (70) to operator^ and convert to radians inside?
+A: Degrees are human-friendly to read and type, while C++ <cmath> sin() and
+   cos() strictly expect radians. Multiplying by (3.14159 / 180.0) converts
+   degrees to radians right before calling sin() and cos().
+
+Q13: What are homogeneous coordinates and why are they needed?
+A: Adding a 3rd coordinate (1) to represent (x, y) as [x, y, 1]^T so that
+   Translation, Rotation, and Scaling can ALL be written as 3x3 matrix
+   multiplications and combined into a single composite matrix.
+
+Q14: Write the 3x3 homogeneous Translation, Scaling, and Rotation matrices.
+A: T: [1,0,tx; 0,1,ty; 0,0,1] | S: [sx,0,0; 0,sy,0; 0,0,1] |
+   R: [cos,-sin,0; sin,cos,0; 0,0,1].
+
+Q15: What is a composite transformation?
+A: Combining two or more transformations by multiplying their 3x3 matrices
+   into one matrix M and applying M to every vertex in a single step.
+
+Q16: Does transformation order matter (is matrix multiplication commutative)?
+A: Yes, order matters! Translate-then-Rotate orbits the object around the
+   origin; Rotate-then-Translate spins it in place and moves it.
+
+Q17: How do you rotate around an arbitrary pivot point (xp, yp)?
+A: 3-step composite: T(xp, yp) * R(theta) * T(-xp, -yp). Shift pivot to
+   origin, rotate, then shift pivot back.
+
+Q18: How do you scale around a fixed point (xf, yf)?
+A: Same 3-step trick: T(xf, yf) * S(sx, sy) * T(-xf, -yf).
+
+Q19: Why did the square in assignment5.cpp rotate and scale cleanly IN PLACE?
+A: Because its vertices (-50,-50) to (50,50) are already centered at (0, 0).
+
+Q20: What is Reflection and what is X-axis reflection?
+A: Mirroring an object across a line. Across X-axis: (x, y) -> (x, -y).
+
+Q21: What is Shearing?
+A: Slanting an object along an axis (e.g., X-shear: x' = x + shx * y, y' = y).
+
+Q22: What is operator overloading in C++?
+A: Compile-time polymorphism allowing standard C++ operators (+, *, ^) to be
+   redefined for user-defined classes like Point.
+
+Q23: Which 3 operators are overloaded in assignment5.cpp and what do they do?
+A: operator+ (Translation), operator* (Uniform Scaling), operator^ (Rotation).
+
+Q24: Which C++ operators CANNOT be overloaded?
+A: :: (scope resolution), . (member access), .* (pointer-to-member),
+   ?: (ternary), sizeof, and typeid.
+
+Q25: Why is operator overloading called compile-time polymorphism?
+A: Because the compiler selects the exact operator function at compile time
+   based on operand types, with zero runtime overhead.
+
+Q26: What does "original[i] + Point(100, 100)" compile to internally?
+A: original[i].operator+(Point(100, 100)).
+
+Q27: Does "original[i] + Point(100, 100)" modify original[i]?
+A: No -- it returns a brand-new Point stored in result[i], leaving original[i]
+   untouched so the white original square stays visible.
+
+Q28: What is the meaning of "::choice = choice;" in main()?
+A: main() declares a local "int choice;" that shadows global "int choice = 0;".
+   The unary scope resolution operator "::" accesses global ::choice so
+   display() receives the user's console choice.
+
+Q29: What happens if you delete "::choice = choice;" from main()?
+A: Global choice stays 0 forever, so display() only draws the white original
+   square and never draws the green transformed square!
+
+Q30: Why does Point's constructor have default parameters (float a=0, float b=0)?
+A: Because "Point result[4];" creates 4 default-initialized Points. Without
+   default arguments (or a 0-arg constructor), the code would fail to compile.
+
+Q31: Why are original[4], result[4], and choice global variables?
+A: GLUT's glutDisplayFunc(display) requires display() to take zero arguments,
+   so display() reads shared data from global variables.
+
+Q32: Why would "2.0 * original[i]" fail to compile while "original[i] * 2.0"
+     succeeds?
+A: operator* is a member function of Point, so the left operand MUST be a
+   Point object. Supporting "2.0 * original[i]" would need a non-member
+   (friend) function operator*(float, Point).
+
+Q33: What is the precedence warning with overloading ^ for rotation?
+A: Bitwise XOR (^) has lower precedence than + and * in C++. Combining
+   operations in one line requires parentheses around rotations.
+
+Q34: What is init() in assignment5.cpp?
+A: A user-defined setup function (not built into GLUT) called once after
+   glutCreateWindow() to set the black background and centered gluOrtho2D.
+
+Q35: Why does init() set a BLACK background glClearColor(0, 0, 0, 1) here?
+A: Because the original square is drawn in White (1,1,1) and the transformed
+   square in Green (0,1,0); white on a white screen would be invisible!
+
+Q36: What does glClear(GL_COLOR_BUFFER_BIT) do in display()?
+A: Wipes the GPU color buffer and fills the window with black before drawing.
+
+Q37: How is (0, 0) placed in the middle of the 800 x 600 window?
+A: Via gluOrtho2D(-400, 400, -300, 300) inside init().
+
+Q38: Why does drawSquare() use GL_LINE_LOOP instead of GL_POLYGON?
+A: GL_LINE_LOOP draws hollow borders so the white original square, gray axes,
+   and green transformed square are all visible together without covering each
+   other up.
+
+Q39: Why does drawSquare() use glVertex2f instead of glVertex2i?
+A: Because Point coordinates are floats and rotation produces decimals;
+   glVertex2f preserves full sub-pixel accuracy.
+
+Q40: What happens when you enter 0 (Reset) in the console menu?
+A: ::choice becomes 0; "if(choice != 0)" is false in display(), so only the
+   gray axes and white original square are drawn.
+
+Q41: What happens if you enter 5 in the console menu?
+A: main() prints "Invalid Choice!" and executes return 0, exiting cleanly
+   before any OpenGL window opens.
+
+Q42: Why does main() read cin BEFORE calling glutMainLoop()?
+A: Because glutMainLoop() is an infinite loop that never returns, and waiting
+   for console input inside a GUI callback would freeze the window.
+
+Q43: What OpenGL functions perform these same 3 transformations on the GPU?
+A: glTranslatef(tx, ty, 0), glRotatef(angle, 0, 0, 1), and glScalef(sx, sy, 1),
+   wrapped in glPushMatrix() and glPopMatrix().
+
+Q44: Why is GLUT_SINGLE used with glFlush() here?
+A: Because the scene is static after drawing (no continuous animation).
+
+Q45: What does glutInit(&argc, argv) do?
+A: Initializes GLUT and processes command-line flags; &argc lets GLUT reduce
+   the count if flags are extracted, while argv is already a pointer.
+
+Q46: What does glutMainLoop() do?
+A: Starts GLUT's infinite event loop, triggering display() and keeping the
+   window open until closed.
+
+Q47: Is the array Point p[] copied when passed to drawSquare()?
+A: No -- in C++, array parameters decay to a pointer (Point* p) with zero
+   copying.
+
+Q48: What are the side length and area of the square after scaling by 2.0?
+A: Original side = 100 (area 10,000). Scaled side = 200 (area 40,000, since
+   2D area scales by s^2 = 4).
+
+Q49: What is the difference between assignment5.cpp and assignment5xy.cpp?
+A: Identical code and OOP structure; only the hardcoded values differ:
+   assignment5.cpp uses (100,100), 70 deg, 2.0;
+   assignment5xy.cpp uses (80,150), 35 deg, 1.7.
+
+Q50: Compute the exact translated and scaled coordinates of vertex (50, -50)
+     in assignment5.cpp.
+A: Translation (100, 100): (50 + 100, -50 + 100) = (150, 50).
+   Scaling (2.0):          (50 * 2.0, -50 * 2.0) = (100, -100).

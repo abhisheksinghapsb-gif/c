@@ -1,0 +1,560 @@
+================================================================================
+        EXPERIMENT 4: SUTHERLAND-HODGMAN POLYGON CLIPPING ALGORITHM
+                        File: assignment4.cpp
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+  1. Quick Visual Overview (How the 4-Stage Pipeline Flows)
+  2. 50-Point Complete Theory Breakdown
+  3. Step-by-Step Code Explanation (Start to End + Every Attribute & Parameter)
+  4. 50 Detailed Viva Questions & Answers
+
+
+================================================================================
+SECTION 1: QUICK VISUAL OVERVIEW (EXECUTION & PIPELINE FLOW)
+================================================================================
+
+  START (main)
+     |
+     v
+  [1] Open 800x600 white window --> Bottom-left origin gluOrtho2D(0, 800, 0, 600)
+     |
+     v
+  [2] display() always draws fixed BLUE clipping window:
+      xmin = 200, xmax = 600, ymin = 150, ymax = 450
+     |
+     +---> Left-Clicks (while !isClipped) --> mouse() adds Point(x, 600-y) to
+     |     polygon vector --> display() draws unclipped RED GL_LINE_LOOP
+     |
+     +---> Backspace (ASCII 8) --> pops last clicked vertex (Undo)
+     |
+     +---> Press 'C' or 'c' (if polygon.size() >= 3) --> performClipping():
+     |
+     |     Original Polygon
+     |            |
+     |            v
+     |     [Stage 0] clipBoundary(..., 0) : Clip against LEFT   (x >= 200)
+     |            |
+     |            v
+     |     [Stage 1] clipBoundary(..., 1) : Clip against RIGHT  (x <= 600)
+     |            |
+     |            v
+     |     [Stage 2] clipBoundary(..., 2) : Clip against BOTTOM (y >= 150)
+     |            |
+     |            v
+     |     [Stage 3] clipBoundary(..., 3) : Clip against TOP    (y <= 450)
+     |            |
+     |            v
+     |     Final clippedPolygon --> isClipped = true --> display() fills it
+     |     GREEN (GL_POLYGON) with a 2px BLACK outline (GL_LINE_LOOP)!
+     |
+     +---> Press 'R' or 'r' --> clears both vectors, isClipped = false --> Reset
+
+
+================================================================================
+SECTION 2: 50-POINT COMPLETE THEORY BREAKDOWN
+================================================================================
+
+ 1. What Is Clipping?: Removing parts of geometric shapes that fall outside a
+    designated rectangular viewing area called the clipping window.
+
+ 2. Why Line Clipping Isn't Enough for Polygons: Clipping edges individually
+    with a line clipper leaves disconnected open line segments instead of a
+    closed polygon that can be filled.
+
+ 3. Core Goal of Polygon Clipping: Take a closed list of polygon vertices and
+    output a new closed list of vertices lying strictly inside the window.
+
+ 4. Inventors & Year: Ivan Sutherland and Gary W. Hodgman published the
+    Sutherland-Hodgman algorithm in 1974.
+
+ 5. Divide-and-Conquer Strategy: Instead of clipping against all 4 walls at
+    once, the algorithm clips the polygon against ONE infinite boundary line
+    at a time in sequence.
+
+ 6. 4-Stage Pipeline: The output list from edge 0 feeds directly as the input
+    list to edge 1, then edge 2, then edge 3:
+    Left (xmin=200) -> Right (xmax=600) -> Bottom (ymin=150) -> Top (ymax=450).
+
+ 7. Edge Order Independence: Any order of the 4 walls yields the exact same
+    final clipped polygon (set intersection of 4 half-planes is commutative).
+
+ 8. Fixed Clipping Window: Defined by const floats xmin = 200, xmax = 600,
+    ymin = 150, ymax = 450 (a 400 x 300 blue box centered in 800 x 600).
+
+ 9. Half-Plane Concept: Each boundary wall is treated as an infinite line
+    splitting the 2D plane into an INSIDE half-plane and an OUTSIDE half-plane.
+
+10. Four Inside Rules (inside(p, edge)):
+    --> edge == 0 (Left):   p.x >= xmin
+    --> edge == 1 (Right):  p.x <= xmax
+    --> edge == 2 (Bottom): p.y >= ymin
+    --> edge == 3 (Top):    p.y <= ymax
+
+11. Edge-by-Edge Traversal: For a given boundary, the loop walks every
+    directed edge S -> P, where S is the previous vertex and P is the current
+    vertex.
+
+12. Closing Edge Trick (S = input.back()): Initializing S to the LAST vertex
+    before starting at i = 0 (P = input[0]) ensures the closing edge from the
+    last vertex back to the first vertex is automatically clipped first.
+
+13. The 4 Clipping Cases for Edge S -> P:
+    --> Case 1 (In  -> In):  Output P
+    --> Case 2 (In  -> Out): Output Intersection I
+    --> Case 3 (Out -> In):  Output Intersection I, then P
+    --> Case 4 (Out -> Out): Output nothing
+
+14. Why Case 1 Only Outputs P (Not S): S was already the endpoint P of the
+    previous edge and was already added in the previous iteration.
+
+15. Why Order Matters in Case 3 (I before P): Pushing intersection I before
+    endpoint P preserves the continuous vertex order around the perimeter so
+    edges never cross over each other.
+
+16. Vertical Wall Intersection Formula (Left xmin / Right xmax):
+    --> x = (edge == 0) ? xmin : xmax
+    --> m = (p2.y - p1.y) / (p2.x - p1.x)
+    --> y = p1.y + m * (x - p1.x)
+
+17. Horizontal Wall Intersection Formula (Bottom ymin / Top ymax):
+    --> y = (edge == 2) ? ymin : ymax
+    --> m_inv = (p2.x - p1.x) / (p2.y - p1.y)
+    --> x = p1.x + m_inv * (y - p1.y)
+
+18. Why Inverse Slope Is Used for Horizontal Walls: If a polygon edge is
+    purely vertical (p2.x == p1.x), regular slope dy / dx would divide by 0!
+    Inverse slope dx / dy cleanly evaluates to 0 with zero crash risk.
+
+19. Why Division by Zero Never Happens in intersection(): intersection() is
+    ONLY called in Case 2 and Case 3, when one endpoint is inside and the
+    other is outside. Thus for vertical walls p2.x != p1.x is guaranteed, and
+    for horizontal walls p2.y != p1.y is guaranteed!
+
+20. Why struct Point Uses float (Not int): Slanted edge intersections produce
+    fractional coordinates (e.g., 245.67). Storing float preserves exact
+    corners across all 4 sequential clipping passes.
+
+21. Empty Polygon Protection: If a polygon lies completely outside the window,
+    an early pass produces an empty vector; "if (input.empty()) return output;"
+    prevents calling input.back() on an empty vector.
+
+22. Degenerate Result Check: drawClippedPolygon() checks "clippedPolygon.size()
+    < 3" so polygons lying completely outside (0, 1, or 2 points) are skipped.
+
+23. Completely Inside Polygon: Every edge hits Case 1 across all 4 walls; the
+    clipped polygon equals the original polygon and gets filled green.
+
+24. Completely Enclosing Polygon: A huge polygon surrounding the whole blue
+    box gets trimmed down by all 4 walls into the exact 4-corner rectangle of
+    the blue clipping window itself!
+
+25. Convex Subject Polygons: Clipping any convex polygon always produces one
+    clean convex polygon with at most (N + 4) vertices.
+
+26. Major Limitation (Concave Subject Polygons): If a concave (U-shaped)
+    polygon exits and re-enters the window, Sutherland-Hodgman outputs all
+    visible pieces in ONE single vertex list joined by unwanted overlapping
+    bridge edges along the window border.
+
+27. Algorithm That Solves Concave Clipping: The Weiler-Atherton Polygon
+    Clipping Algorithm cleanly separates disconnected concave pieces into
+    multiple distinct polygons.
+
+28. Convex Clipping Window Requirement: Sutherland-Hodgman works for ANY
+    convex clipping window (triangle, rectangle, hexagon), not just rectangles.
+
+29. Re-Entrant / Hardware Pipeline Name: Called a re-entrant clipper because
+    the same clipping logic repeats per edge and can be pipelined in hardware.
+
+30. OpenGL GL_POLYGON Limitation: GL_POLYGON only guarantees correct fills for
+    simple convex polygons (concave shapes need triangulation).
+
+31. Time Complexity: O(E * V) = O(4 * V) = O(V) linear time, where V is the
+    number of polygon vertices and E = 4 window edges.
+
+32. Space Complexity: O(V) auxiliary RAM for intermediate output vertex lists.
+
+33. Numerical Example Setup: Clip triangle A(100,300), B(300,300), C(300,500)
+    against Left wall xmin = 200 and Top wall ymax = 450.
+
+34. Numerical Trace - Left Wall (xmin = 200, Inside: x >= 200):
+    Start S = C(300,500).
+    --> C(300,500) -> A(100,300): In->Out (Case 2). m = 1, I1 = (200, 400).
+        Save: (200, 400).
+    --> A(100,300) -> B(300,300): Out->In (Case 3). m = 0, I2 = (200, 300).
+        Save: (200, 300), (300, 300).
+    --> B(300,300) -> C(300,500): In->In  (Case 1).
+        Save: (300, 500).
+    Output after Left (4 pts): (200,400), (200,300), (300,300), (300,500).
+
+35. Numerical Trace - Right (<=600) & Bottom (>=150): All 4 points are inside;
+    list stays unchanged.
+
+36. Numerical Trace - Top Wall (ymax = 450, Inside: y <= 450):
+    Start S = C(300,500).
+    --> C(300,500) -> (200,400): Out->In (Case 3). m_inv = 1, I3 = (250, 450).
+        Save: (250, 450), (200, 400).
+    --> (200,400)  -> (200,300): In->In  (Case 1). Save: (200, 300).
+    --> (200,300)  -> (300,300): In->In  (Case 1). Save: (300, 300).
+    --> (300,300)  -> (300,500): In->Out (Case 2). m_inv = 0, I4 = (300, 450).
+        Save: (300, 450).
+
+37. Numerical Final Clipped Pentagon (5 pts):
+    (250,450) -> (200,400) -> (200,300) -> (300,300) -> (300,450).
+
+38. Coordinate System: gluOrtho2D(0, WIDTH, 0, HEIGHT) places (0, 0) at the
+    bottom-left corner and (800, 600) at the top-right corner.
+
+39. Mouse Coordinate Conversion: X needs no shift (p.x = x); Y is flipped from
+    top-down to bottom-up via p.y = HEIGHT - y.
+
+40. Visual Color Scheme:
+    --> White background (1, 1, 1, 1)
+    --> Blue 2px clipping window (0, 0, 1)
+    --> Dark Red original unclipped polygon (0.8, 0, 0)
+    --> Green filled clipped polygon (0, 0.8, 0.2) + 2px Black outline (0,0,0)
+
+41. OpenGL State Machine Reset: Both drawWindow() and drawClippedPolygon()
+    reset glLineWidth(1.0) after setting 2.0 so later lines don't stay thick.
+
+42. Live Preview While Clicking: drawOriginalPolygon() uses GL_LINE_LOOP so
+    the red polygon closes automatically as you click each new vertex.
+
+43. Undo Feature (Backspace): Pressing Backspace sends ASCII code 8; keyboard()
+    checks (key == 8) and calls polygon.pop_back() if !polygon.empty().
+
+44. Minimum Vertex Validation: performClipping() checks (polygon.size() < 3)
+    so 1 or 2 clicked points cannot trigger clipping.
+
+45. Click Lock After Clipping: mouse() checks "if (!isClipped)" so extra
+    clicks cannot alter polygon while viewing the green clipped result.
+
+46. Display Toggle: display() shows ONLY drawClippedPolygon() when isClipped
+    is true, and drawOriginalPolygon() when isClipped is false.
+
+47. Painter's Order: drawWindow() runs before drawClippedPolygon() so the
+    green fill and black border draw cleanly on top of the blue box.
+
+48. Reset ('r'/'R'): Clears both polygon and clippedPolygon vectors and sets
+    isClipped = false.
+
+49. Single Buffering (GLUT_SINGLE): Paired with glFlush() since the screen
+    only updates on clicks and key presses.
+
+50. Real-World Applications: 3D view-frustum triangle clipping in GPUs, GIS map
+    cropping, CAD viewport clipping, and 2D game camera bounds.
+
+
+================================================================================
+SECTION 3: STEP-BY-STEP CODE EXPLANATION (START TO END)
+================================================================================
+
+--------------------------------------------------------------------------------
+STEP 1: HEADERS, CONSTANTS, STRUCT & GLOBALS (Lines 1 - 24)
+--------------------------------------------------------------------------------
+  #include <iostream>   --> Console instructions and messages.
+  #include <vector>     --> Dynamic vertex arrays (polygon, clippedPolygon).
+  #include <GL/glut.h>  --> OpenGL, GLU, and GLUT library APIs.
+  using namespace std;
+
+  const int WIDTH = 800, HEIGHT = 600; --> Window dimensions.
+  const float xmin = 200, ymin = 150, xmax = 600, ymax = 450; --> Clip walls.
+  struct Point { float x, y; };        --> 2D floating-point vertex.
+  vector<Point> polygon;               --> Original user-clicked vertices.
+  vector<Point> clippedPolygon;        --> Result vertices after 4 clip passes.
+  bool isClipped = false;              --> Toggles display & locks mouse.
+
+--------------------------------------------------------------------------------
+STEP 2: inside() HELPER FUNCTION (Lines 27 - 36)
+--------------------------------------------------------------------------------
+  bool inside(Point p, int edge)
+    --> Parameters: p (vertex to test), edge (0=Left, 1=Right, 2=Bottom, 3=Top).
+    --> Returns true if p lies on the inside half-plane of that boundary:
+        0: p.x >= xmin | 1: p.x <= xmax | 2: p.y >= ymin | 3: p.y <= ymax.
+
+--------------------------------------------------------------------------------
+STEP 3: intersection() HELPER FUNCTION (Lines 39 - 65)
+--------------------------------------------------------------------------------
+  Point intersection(Point p1, Point p2, int edge)
+    --> Parameters: p1 (start S), p2 (end P), edge (0..3).
+    --> If vertical wall (edge == 0 || edge == 1):
+          x = (edge == 0) ? xmin : xmax;
+          m = (p2.y - p1.y) / (p2.x - p1.x);
+          p.x = x; p.y = p1.y + m * (x - p1.x);
+    --> Else horizontal wall (edge == 2 || edge == 3):
+          y = (edge == 2) ? ymin : ymax;
+          m = (p2.x - p1.x) / (p2.y - p1.y);  // inverse slope avoids /0!
+          p.y = y; p.x = p1.x + m * (y - p1.y);
+    --> Returns intersection Point p.
+
+--------------------------------------------------------------------------------
+STEP 4: clipBoundary() - ONE SUTHERLAND-HODGMAN PASS (Lines 68 - 103)
+--------------------------------------------------------------------------------
+  vector<Point> clipBoundary(vector<Point> input, int edge)
+    --> Parameters: input (current polygon vertices), edge (0..3).
+    --> Guard: if (input.empty()) return output;
+    --> Set S = input.back() so closing edge (last -> first) is processed first.
+    --> Loop i = 0 to (int)input.size() - 1:
+          P = input[i];
+          bool S_inside = inside(S, edge);
+          bool P_inside = inside(P, edge);
+          Case 1 (S_inside && P_inside)  --> output.push_back(P);
+          Case 2 (S_inside && !P_inside) --> output.push_back(intersection(S,P,edge));
+          Case 3 (!S_inside && P_inside) --> output.push_back(intersection(S,P,edge));
+                                             output.push_back(P);
+          Case 4 (!S_inside && !P_inside)--> do nothing.
+          S = P; (advance start point for next edge)
+    --> Return output vector.
+
+--------------------------------------------------------------------------------
+STEP 5: performClipping() - RUN ALL 4 STAGES (Lines 106 - 123)
+--------------------------------------------------------------------------------
+  Checks if (polygon.size() < 3) --> prints error & returns.
+  Copies clippedPolygon = polygon.
+  Loops edge = 0..3: clippedPolygon = clipBoundary(clippedPolygon, edge);
+  Sets isClipped = true and prints "Polygon clipping completed!".
+
+--------------------------------------------------------------------------------
+STEP 6: DRAWING HELPERS (Lines 126 - 196)
+--------------------------------------------------------------------------------
+  drawWindow():
+    --> Sets Blue (0,0,1), glLineWidth(2.0), draws GL_LINE_LOOP rectangle
+        (xmin,ymin)->(xmax,ymin)->(xmax,ymax)->(xmin,ymax), resets width to 1.0.
+  drawOriginalPolygon():
+    --> If not empty, sets Dark Red (0.8,0,0), draws GL_LINE_LOOP of polygon.
+  drawClippedPolygon():
+    --> Guard: if (!isClipped || clippedPolygon.size() < 3) return;
+    --> Pass 1: Bright Green (0, 0.8, 0.2) solid interior using GL_POLYGON.
+    --> Pass 2: Black (0, 0, 0), glLineWidth(2.0) outline using GL_LINE_LOOP,
+        then resets glLineWidth(1.0).
+    --> Uses glVertex2f (2D float) to preserve decimal intersection points.
+
+--------------------------------------------------------------------------------
+STEP 7: display(), mouse(), keyboard() & main() (Lines 199 - 294)
+--------------------------------------------------------------------------------
+  display():
+    --> glClear(GL_COLOR_BUFFER_BIT); drawWindow();
+    --> if (isClipped) drawClippedPolygon(); else drawOriginalPolygon();
+    --> glFlush();
+  mouse(int button, int state, int x, int y):
+    --> On left press & !isClipped: p.x = x; p.y = HEIGHT - y;
+        polygon.push_back(p); glutPostRedisplay();
+  keyboard(unsigned char key, int x, int y):
+    --> 'c'/'C': performClipping(); glutPostRedisplay();
+    --> 'r'/'R': polygon.clear(); clippedPolygon.clear(); isClipped = false;
+    --> key == 8 (Backspace): if (!polygon.empty()) polygon.pop_back();
+  main():
+    --> Initializes GLUT (GLUT_SINGLE | GLUT_RGB), 800x600 window, white
+        background, gluOrtho2D(0, WIDTH, 0, HEIGHT), registers callbacks,
+        prints controls, and runs glutMainLoop().
+
+
+================================================================================
+SECTION 4: 50 DETAILED VIVA QUESTIONS & ANSWERS
+================================================================================
+
+Q1: What is clipping in computer graphics?
+A: The process of identifying and removing portions of geometric objects that
+   lie outside a specified viewing region (clipping window).
+
+Q2: Why can't we use Cohen-Sutherland line clipping to clip filled polygons?
+A: Line clippers output disconnected open line segments rather than a closed
+   ordered polygon, so the interior can no longer be filled properly.
+
+Q3: Explain the core idea of the Sutherland-Hodgman algorithm.
+A: It clips a closed polygon sequentially against one window boundary edge at
+   a time (Left -> Right -> Bottom -> Top), passing the output vertices of one
+   stage as input to the next.
+
+Q4: What are the 4 cases for an edge S -> P against a clip boundary?
+A: 1) In -> In: output P.
+   2) In -> Out: output intersection I.
+   3) Out -> In: output I, then P.
+   4) Out -> Out: output nothing.
+
+Q5: In Case 1 (In -> In), why do we only output P and NOT S?
+A: Because S was already the endpoint P of the previous edge and was already
+   pushed to output on the prior iteration.
+
+Q6: In Case 3 (Out -> In), why must I be pushed BEFORE P?
+A: To preserve the continuous vertex ordering around the polygon perimeter;
+   swapping them would twist edges like a bowtie.
+
+Q7: Why is S initialized to input.back() before the loop in clipBoundary()?
+A: So the very first iteration (i = 0, P = input[0]) processes the closing
+   edge connecting the last vertex back to the first vertex.
+
+Q8: Does changing the order of the 4 clip boundaries change the final result?
+A: No. Clipping against 4 half-planes is geometric set intersection, which is
+   commutative and always produces the exact same clipped polygon.
+
+Q9: What are the inside conditions for the 4 edges in assignment4.cpp?
+A: Left (0): x >= xmin; Right (1): x <= xmax; Bottom (2): y >= ymin;
+   Top (3): y <= ymax.
+
+Q10: Why do inside tests use >= and <= instead of > and <?
+A: So points sitting directly on the blue window border are treated as inside,
+   avoiding unnecessary intersections and rounding errors on the edge.
+
+Q11: Write the intersection formula for vertical walls (xmin / xmax).
+A: x = xmin (or xmax); m = (p2.y - p1.y) / (p2.x - p1.x);
+   y = p1.y + m * (x - p1.x).
+
+Q12: Write the intersection formula for horizontal walls (ymin / ymax).
+A: y = ymin (or ymax); m_inv = (p2.x - p1.x) / (p2.y - p1.y);
+   x = p1.x + m_inv * (y - p1.y).
+
+Q13: Why is inverse slope (dx / dy) used for horizontal walls instead of
+     dividing by regular slope (dy / dx)?
+A: If a polygon edge is perfectly vertical (p2.x == p1.x), regular slope
+   would divide by 0. Inverse slope cleanly evaluates to 0 with no crash!
+
+Q14: Can intersection() ever divide by zero in assignment4.cpp?
+A: Never. intersection() is only called when one endpoint is inside and one is
+   outside a boundary, guaranteeing p2.x != p1.x for vertical walls and
+   p2.y != p1.y for horizontal walls.
+
+Q15: What is the biggest limitation of Sutherland-Hodgman clipping?
+A: When clipping a concave polygon (like a U-shape) that leaves and re-enters
+   the window, it outputs all visible pieces in one single vertex list joined
+   by unwanted extra lines along the window border.
+
+Q16: Which algorithm fixes the concave polygon clipping limitation?
+A: The Weiler-Atherton Polygon Clipping Algorithm, which separates
+   disconnected visible parts into distinct clean polygons.
+
+Q17: Does Sutherland-Hodgman require the clipping window to be a rectangle?
+A: No -- it works for ANY convex clipping window (triangles, hexagons, etc.),
+   though assignment4.cpp uses an axis-aligned rectangle.
+
+Q18: What happens if a polygon lies completely OUTSIDE the blue window?
+A: One of the 4 clip passes outputs an empty vector; drawClippedPolygon()
+   sees clippedPolygon.size() < 3 and draws nothing.
+
+Q19: What happens if a huge polygon completely SURROUNDS the blue window?
+A: All 4 edges trim it down until clippedPolygon becomes the exact 4 corners
+   of the blue window itself, filling the entire window green.
+
+Q20: What is the maximum number of vertices after clipping an N-sided convex
+     polygon against a 4-sided rectangle?
+A: At most N + 4 vertices (each window wall can slice a corner and add at most
+   1 net new vertex).
+
+Q21: What is the time complexity of Sutherland-Hodgman?
+A: O(E * V) = O(4 * V) = O(V) linear time in the number of vertices.
+
+Q22: What is the space complexity of Sutherland-Hodgman?
+A: O(V) auxiliary memory to hold intermediate vertex vectors.
+
+Q23: Why does struct Point use float x, y instead of int x, y?
+A: Intersection coordinates from floating-point division are decimals; storing
+   float preserves exact geometry across all 4 sequential passes.
+
+Q24: Why is glVertex2f used instead of glVertex2i?
+A: To match float coordinates in Point and preserve exact decimal intersections
+   without integer truncation.
+
+Q25: Why does clipBoundary() check "if (input.empty()) return output;"?
+A: Calling input.back() on an empty vector causes undefined behavior (crash)
+   when an earlier edge already clipped the entire polygon away.
+
+Q26: Why does drawClippedPolygon() check "clippedPolygon.size() < 3"?
+A: Fewer than 3 vertices cannot form a 2D area to fill with GL_POLYGON.
+
+Q27: Why does drawClippedPolygon() draw clippedPolygon TWICE?
+A: First with GL_POLYGON to fill the interior bright green, and second with
+   GL_LINE_LOOP to draw a crisp 2-pixel black border around it.
+
+Q28: What is the limitation of OpenGL's GL_POLYGON primitive?
+A: OpenGL only guarantees correct filling for simple CONVEX polygons; concave
+   polygons require triangulation (GL_TRIANGLES).
+
+Q29: Why does drawWindow() reset glLineWidth(1.0) at the end?
+A: OpenGL is a state machine -- settings stay active until changed. Resetting
+   to 1.0 stops drawOriginalPolygon() from inheriting the 2.0 width.
+
+Q30: What is the difference between GL_LINE_LOOP and GL_LINE_STRIP?
+A: GL_LINE_STRIP leaves the polygon open; GL_LINE_LOOP automatically connects
+   the last vertex back to the first vertex.
+
+Q31: How does Backspace undo work in keyboard()?
+A: ASCII code 8 is Backspace. Checking "else if (key == 8)" and calling
+   polygon.pop_back() (after checking !polygon.empty()) removes the last point.
+
+Q32: Why must we check "!polygon.empty()" before calling polygon.pop_back()?
+A: Calling pop_back() on an empty vector triggers undefined behavior / crash.
+
+Q33: Why does mouse() check "if (!isClipped)"?
+A: To lock mouse clicks after clipping so stray clicks don't modify polygon
+   while viewing the clipped green result.
+
+Q34: Why is mouse Y converted using "p.y = HEIGHT - y"?
+A: gluOrtho2D(0, WIDTH, 0, HEIGHT) puts (0, 0) at bottom-left with Y going up,
+   whereas GLUT mouse y goes top-down (0 at top, 600 at bottom).
+
+Q35: What are the dimensions of the blue clipping window in assignment4.cpp?
+A: xmin=200 to xmax=600 (width 400 px) and ymin=150 to ymax=450 (height 300 px).
+
+Q36: Why does display() call drawWindow() BEFORE drawClippedPolygon()?
+A: OpenGL draws in Painter's order (later shapes draw over earlier ones), so
+   the green fill and black outline sit cleanly on top of the blue frame.
+
+Q37: What happens if you press 'C' after clicking only 2 points?
+A: performClipping() checks "if (polygon.size() < 3)", prints a warning, and
+   returns without setting isClipped = true.
+
+Q38: What happens when you press 'r' or 'R'?
+A: Both polygon and clippedPolygon are cleared, isClipped resets to false,
+   and glutPostRedisplay() restores a blank screen with just the blue window.
+
+Q39: Why do we check both 'c' and 'C' (and 'r' and 'R')?
+A: Lowercase and uppercase letters have different ASCII values; checking both
+   makes controls work regardless of Caps Lock.
+
+Q40: What does glClearColor(1.0, 1.0, 1.0, 1.0) and glClear(GL_COLOR_BUFFER_BIT) do?
+A: glClearColor selects opaque White; glClear wipes the color buffer to white
+   at the start of every display() frame.
+
+Q41: Why is GLUT_SINGLE used with glFlush() here?
+A: Because the drawing is static between user interactions (no continuous
+   animation), so single buffering is sufficient.
+
+Q42: Why is "(int)input.size()" cast to int in the for-loop?
+A: vector::size() returns unsigned size_t; casting to int prevents signed vs.
+   unsigned compiler comparison warnings with "int i".
+
+Q43: What is the difference between a Window and a Viewport?
+A: A Window selects WHAT region of world coordinates to view; a Viewport
+   defines WHERE on the physical display screen that region is mapped.
+
+Q44: What is the difference between Cohen-Sutherland and Sutherland-Hodgman?
+A: Cohen-Sutherland clips straight LINES using 4-bit outcodes; Sutherland-Hodgman
+   clips closed POLYGONS sequentially against each window edge.
+
+Q45: What is the difference between Liang-Barsky and Sutherland-Hodgman?
+A: Liang-Barsky is a parametric LINE clipper; Sutherland-Hodgman is a POLYGON
+   clipper.
+
+Q46: What does glutPostRedisplay() do?
+A: Marks the window dirty so GLUT triggers display() on the next loop cycle.
+
+Q47: What does glutInit(&argc, argv) do?
+A: Initializes GLUT and parses command-line flags; &argc lets GLUT modify the
+   count if flags are consumed, while argv is already a pointer.
+
+Q48: What does glutMainLoop() do?
+A: Starts GLUT's infinite event loop listening for clicks, keys, and redraws.
+
+Q49: How could you display BOTH the red original polygon and the green clipped
+     polygon together?
+A: In display(), always call drawOriginalPolygon(), and then run "if (isClipped)
+   drawClippedPolygon();" right after it (removing the else).
+
+Q50: Edge S(150, 200) -> P(250, 400) clipped against Left wall xmin = 200:
+     which case applies and what vertices are output?
+A: S(150 < 200) is Outside; P(250 >= 200) is Inside --> Case 3 (Out -> In).
+   Slope m = (400 - 200) / (250 - 150) = 2.
+   Intersection: x = 200, y = 200 + 2 * (200 - 150) = 300 --> I = (200, 300).
+   Output: (200, 300) followed by (250, 400).

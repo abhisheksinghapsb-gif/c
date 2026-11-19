@@ -1,0 +1,676 @@
+================================================================================
+            EXPERIMENT 3a: FLOOD FILL ALGORITHM (4-CONNECTED)
+                        File: assignment3a.cpp
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+  1. Quick Visual Overview (How the Program Flows)
+  2. 50-Point Complete Theory Breakdown
+  3. Step-by-Step Code Explanation (Start to End + Every Attribute & Parameter)
+  4. 50 Detailed Viva Questions & Answers
+
+
+================================================================================
+SECTION 1: QUICK VISUAL OVERVIEW (EXECUTION FLOW)
+================================================================================
+
+  START (main)
+     |
+     v
+  [1] Open 800x600 white window --> Bottom-left origin gluOrtho2D(0, 800, 0, 600)
+     |
+     v
+  [2] Register display(), mouse(), keyboard(), and Right-Click Pop-Up Menu
+     |
+     v
+  [3] WORKFLOW STATE MACHINE:
+       (State 1: Drawing)  Left-Clicks --> adds vertices to vector<Point> polygon
+                           display() draws open black GL_LINE_STRIP
+               |
+               v  User presses 'C' (or Right-Click -> Close Polygon) [size >= 3]
+       (State 2: Closed)   polygonClosed = true
+                           display() draws closed black GL_LINE_LOOP
+               |
+               v  User presses 'F' (or Right-Click -> Flood Fill)
+       (State 3: Ready)    fillMode = true (waiting for interior seed click)
+               |
+               v  User Left-Clicks inside polygon at (sx, sy)
+       (State 4: Filling)  floodFill(sx, sy) runs:
+                             1. Draws clean polygon to screen & flushes
+                             2. Copies ALL 800x600 RGBA pixels into RAM (glReadPixels)
+                             3. Iterative DFS stack starts at seed (sx, sy):
+                                  Pop (x, y) -> Inside bounds? -> Is it White (255,255,255)?
+                                  YES -> Paint Red (255,0,0,255) & push 4 neighbors:
+                                         (x+1,y), (x-1,y), (x,y+1), (x,y-1)
+                             4. Sets filled = true --> triggers display()
+               |
+               v
+       (State 5: Filled)   display() blasts RAM buffer back to GPU via glDrawPixels()
+               |
+               v  User presses 'R' (or Right-Click -> Reset)
+       Clears polygon & pixels, resets all 3 booleans --> Back to State 1!
+
+
+================================================================================
+SECTION 2: 50-POINT COMPLETE THEORY BREAKDOWN
+================================================================================
+
+ 1. What Is Flood Fill?: A seed-based region-filling algorithm that starts at
+    one interior pixel (the seed) and replaces all connected pixels matching a
+    target (old) color with a new fill color.
+
+ 2. Real-World Analogy: It is the exact algorithm behind the "Paint Bucket"
+    tool in MS Paint and Photoshop.
+
+ 3. Seed Point (sx, sy): The starting pixel clicked by the user inside the
+    closed polygon from which the color spreads outward.
+
+ 4. Target (Old) Color: The interior color being replaced. In assignment3a.cpp,
+    this is pure White: R=255, G=255, B=255.
+
+ 5. Fill (New) Color: The replacement color painted onto connected white
+    pixels. In assignment3a.cpp, this is opaque Red: R=255, G=0, B=0, A=255.
+
+ 6. Flood Fill vs. Boundary Fill:
+    --> Flood Fill checks: "Does this pixel match the OLD INTERIOR color?"
+        Works even when polygon borders have multiple different colors.
+    --> Boundary Fill checks: "Is this pixel NOT the boundary AND NOT filled?"
+        Requires a single uniform boundary color.
+
+ 7. 4-Connected Neighborhood: Each painted pixel checks only its 4 orthogonal
+    neighbors: Right (x+1, y), Left (x-1, y), Up (x, y+1), and Down (x, y-1).
+
+ 8. 8-Connected Neighborhood: Checks the 4 orthogonal neighbors PLUS the 4
+    diagonal neighbors (x+-1, y+-1).
+
+ 9. Why assignment3a.cpp Uses 4-Connected Fill: A 4-connected fill cannot
+    squeeze diagonally across thin slanted polygon edges, preventing color
+    from leaking out into the background.
+
+10. Limitation of 4-Connected Fill: If an interior pocket connects only by a
+    1-pixel diagonal corner, 4-connected fill stops there and leaves that
+    corner pocket unfilled.
+
+11. Graph Traversal Perspective: Flood Fill treats the pixel grid as a graph
+    where every pixel is a node connected to its 4 neighboring pixels.
+
+12. Iterative DFS (Stack-Based): Using vector<Point> stack with push_back()
+    and pop_back() (Last-In, First-Out) performs an iterative Depth-First
+    Search across the region.
+
+13. Why Recursion Is Avoided Here: Recursive floodFill(x+1, y) pushes a call
+    stack frame for every pixel. An 800x600 window has 480,000 pixels, which
+    overflows C++'s small call stack and causes a Stack Overflow crash.
+
+14. Heap-Allocated Stack Advantage: std::vector<Point> lives in heap memory
+    (RAM), safely storing hundreds of thousands of pixel coordinates without
+    crashing.
+
+15. Stopping Condition / Infinite-Loop Safety: Once a white pixel (255,255,255)
+    is painted red (255,0,0), it no longer matches the white check, so it is
+    never painted or expanded again.
+
+16. What If Target Color == Fill Color?: Checking for white and painting white
+    would create an infinite loop! Here target is white and fill is red, so it
+    always terminates.
+
+17. Bounds Checking: Before calculating the array index, the loop checks
+    "if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) continue;" to prevent
+    out-of-bounds memory crashes if the fill touches the window edge.
+
+18. GPU-to-CPU Bulk Readback (glReadPixels): Copies the ENTIRE 800 x 600 frame
+    buffer from GPU memory into CPU RAM (pixels vector) in one single fast call.
+
+19. Why Bulk Readback Is Extremely Fast: Reading 1 pixel at a time inside a
+    loop stalls the CPU-GPU pipeline 100,000+ times (slow). Reading the full
+    screen ONCE, filling in RAM, and drawing back ONCE finishes almost
+    instantly.
+
+20. RGBA Pixel Format (GL_RGBA): Stores 4 bytes per pixel -- Red, Green, Blue,
+    and Alpha -- each as an unsigned char from 0 to 255.
+
+21. Total RAM Buffer Size: 800 * 600 * 4 = 1,920,000 bytes (about 1.83 MB).
+
+22. Why unsigned char Is Required: One color channel needs values 0..255 (1
+    byte). Signed char only goes up to 127 (breaking "== 255"), while int
+    would waste 4x memory.
+
+23. 2D-to-1D Row-Major Indexing Formula:
+    --> int index = (y * WIDTH + x) * 4;
+    Row y starts after (y * WIDTH) pixels, then x moves across the row, and
+    multiplying by 4 converts pixel number to byte offset.
+
+24. Byte Offsets at index:
+    --> pixels[index]     = Red   (0..255)
+    --> pixels[index + 1] = Green (0..255)
+    --> pixels[index + 2] = Blue  (0..255)
+    --> pixels[index + 3] = Alpha (0..255)
+
+25. Bottom-Up Row Storage: glReadPixels stores row y = 0 as the BOTTOM row of
+    the window and y = HEIGHT - 1 as the TOP row, matching OpenGL's bottom-left
+    origin.
+
+26. CPU-to-GPU Bulk Writeback (glDrawPixels): Copies the modified pixels array
+    from RAM back onto the GPU screen starting at glRasterPos2i(0, 0).
+
+27. Coordinate System in Exp 3a: Uses gluOrtho2D(0, WIDTH, 0, HEIGHT) so
+    (0, 0) is at the BOTTOM-LEFT corner and (800, 600) is at TOP-RIGHT.
+
+28. Why Bottom-Left Origin Is Used Instead of Centered Origin: Because
+    glReadPixels() indexes pixels from (0, 0) at bottom-left to (799, 599) at
+    top-right. Matching gluOrtho2D(0, 800, 0, 600) makes screen coordinates
+    and pixel indices match 1-to-1!
+
+29. Mouse Coordinate Conversion (HEIGHT - 1 - y): GLUT mouse y goes 0 (top)
+    to 599 (bottom). Computing wy = HEIGHT - 1 - y flips it to 599..0 AND
+    guarantees wy stays strictly within valid array rows [0, 599].
+
+30. Why HEIGHT - 1 - y Instead of HEIGHT - y: Clicking the very top pixel
+    (y = 0) with HEIGHT - y would yield 600, which is out of bounds for rows
+    0..599. HEIGHT - 1 - y gives 599.
+
+31. Interactive Polygon Drawing: Every left click before closing appends a
+    new Point(wx, wy) to vector<Point> polygon.
+
+32. Open vs. Closed Primitive Selection: Uses a ternary operator inside
+    glBegin(): GL_LINE_STRIP while clicking (leaves polygon open), switching
+    to GL_LINE_LOOP after closing (connects last vertex back to first).
+
+33. Minimum 3 Vertices Rule: closePolygon() checks "if (polygon.size() >= 3)"
+    because 1 or 2 points cannot enclose a 2D area.
+
+34. Boundary Line Width (2.0): glLineWidth(2.0) draws a bold 2-pixel black
+    border that is easy to see and completely prevents diagonal leaks.
+
+35. Three-Boolean State Machine:
+    --> polygonClosed : tracks whether user finished drawing & closed shape
+    --> fillMode      : tracks whether user pressed 'F' to pick a seed point
+    --> filled        : tracks whether floodFill() has completed
+
+36. Clean Buffer Guarantee: At the start of floodFill(), it explicitly calls
+    glClear(), drawPolygon(), and glFlush() before glReadPixels() so the GPU
+    buffer is guaranteed to hold a fresh black polygon on a white canvas.
+
+37. Cached Display After Filling: Once filled is true, display() simply blasts
+    the saved pixels array with glDrawPixels() instead of re-running the fill
+    algorithm on every window repaint.
+
+38. Right-Click Pop-Up Menu: Uses glutCreateMenu(), glutAddMenuEntry(), and
+    glutAttachMenu(GLUT_RIGHT_BUTTON) to expose Close, Flood Fill, Reset, and
+    Exit in a right-click menu.
+
+39. Handles Concave & Complex Polygons: Unlike OpenGL's GL_POLYGON (which only
+    reliably fills convex shapes), Flood Fill accurately fills convex,
+    concave, L-shaped, star-shaped, and complex polygons.
+
+40. Clicking Outside the Polygon: If you press F and click outside the black
+    polygon, the outside white background gets flooded red while the inside
+    stays white!
+
+41. Clicking Directly on the Black Border: Black has RGB (0, 0, 0), which
+    fails the white check immediately, so nothing gets painted red.
+
+42. Duplicate Stack Pushes: Because pixels are colored when popped (not when
+    pushed), an uncolored neighbor can be pushed up to 3-4 times before being
+    popped and skipped; still completely accurate and fast for 800x600.
+
+43. Time Complexity: O(N), where N is the number of interior pixels filled
+    (at most O(WIDTH * HEIGHT)), since each pixel is painted once and checks
+    4 neighbors.
+
+44. Space Complexity: O(WIDTH * HEIGHT) for the RGBA pixels vector plus up to
+    O(N) for the traversal stack.
+
+45. Reset Behaviour ('R' / Menu 3): Empties polygon and pixels via .clear(),
+    resets polygonClosed, fillMode, and filled to false, and redraws a blank
+    white canvas.
+
+46. Exit Option (Menu 4): Calls exit(0) to cleanly terminate the infinite
+    glutMainLoop() and close the window.
+
+47. Single Buffering (GLUT_SINGLE): Used with glFlush() because drawing only
+    changes on user clicks, key presses, or menu actions.
+
+48. Guard Against Premature Fill: Pressing 'F' before closing the polygon does
+    nothing because keyboard() checks "if (polygonClosed && !filled)".
+
+49. Advantages of Flood Fill: Works on arbitrary concave/irregular polygons
+    and handles multi-colored boundaries effortlessly.
+
+50. Disadvantages of Flood Fill: Needs an interior seed point, uses extra RAM
+    for pixel/stack storage, and leaks across the entire screen if the border
+    is not completely closed.
+
+
+================================================================================
+SECTION 3: STEP-BY-STEP CODE EXPLANATION (START TO END)
+================================================================================
+
+--------------------------------------------------------------------------------
+STEP 1: HEADERS, CONSTANTS, STRUCT & GLOBALS (Lines 1 - 21)
+--------------------------------------------------------------------------------
+  #include <iostream>   --> Console output (cout, endl).
+  #include <GL/glut.h>  --> OpenGL, GLU, and GLUT library APIs.
+  #include <vector>     --> Provides std::vector dynamic arrays for vertices,
+                            screen pixels, and the DFS stack.
+  using namespace std;
+
+  const int WIDTH = 800;
+  const int HEIGHT = 600;
+    --> Fixed window width and height constants shared across GLUT setup,
+        gluOrtho2D, mouse flipping, and pixel array indexing.
+
+  struct Point { int x, y; };
+    --> Groups an integer 2D pixel coordinate (x, y) into one clean unit.
+
+  vector<Point> polygon;         --> Stores clicked polygon vertices in order.
+  vector<unsigned char> pixels;  --> Stores raw 8-bit RGBA bytes (0..255) of
+                                     the entire 800 x 600 window.
+  bool polygonClosed = false;    --> True once user closes polygon (>= 3 pts).
+  bool fillMode = false;         --> True after 'F' is pressed, waiting for seed.
+  bool filled = false;           --> True once floodFill() finishes.
+
+--------------------------------------------------------------------------------
+STEP 2: drawPolygon() FUNCTION (Lines 24 - 41)
+--------------------------------------------------------------------------------
+  if (polygon.empty()) return;
+    --> Exits safely if no vertices have been clicked yet.
+
+  glColor3f(0.0, 0.0, 0.0); --> Sets polygon outline color to solid Black.
+  glLineWidth(2.0);         --> Makes outline 2 pixels wide (bold & leak-proof).
+
+  glBegin(polygonClosed ? GL_LINE_LOOP : GL_LINE_STRIP);
+    --> Ternary condition chooses primitive mode:
+        polygonClosed == false --> GL_LINE_STRIP (open chain of edges)
+        polygonClosed == true  --> GL_LINE_LOOP  (automatically closes last->first)
+
+  for (int i = 0; i < polygon.size(); i++)
+      glVertex2i(polygon[i].x, polygon[i].y);
+    --> Sends each 2D integer vertex to OpenGL.
+  glEnd();
+
+--------------------------------------------------------------------------------
+STEP 3: display() CALLBACK FUNCTION (Lines 44 - 63)
+--------------------------------------------------------------------------------
+  glClear(GL_COLOR_BUFFER_BIT); --> Wipes GPU color buffer to White.
+
+  if (filled) {
+      glRasterPos2i(0, 0);
+        --> Sets the bottom-left anchor point (0, 0) where glDrawPixels starts.
+      glDrawPixels(WIDTH, HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, &pixels[0]);
+        --> Copies our modified RAM pixel array back onto the GPU screen.
+            Parameters:
+              WIDTH, HEIGHT    : Rectangle dimensions (800 x 600)
+              GL_RGBA          : 4 channels per pixel (Red, Green, Blue, Alpha)
+              GL_UNSIGNED_BYTE : Each channel is 1 byte (0..255)
+              &pixels[0]       : Memory address of first byte in pixels vector
+  } else {
+      drawPolygon(); --> Before filling, simply draw the black outline.
+  }
+
+  glFlush(); --> Pushes rendering commands immediately to screen.
+
+--------------------------------------------------------------------------------
+STEP 4: floodFill() FUNCTION - CORE ALGORITHM (Lines 66 - 125)
+--------------------------------------------------------------------------------
+  Function Signature: void floodFill(int sx, int sy)
+    --> Parameters: sx, sy = integer seed pixel clicked by the user.
+
+  [4.1] Render a fresh polygon onto the GPU buffer:
+        glClear(GL_COLOR_BUFFER_BIT);
+        drawPolygon();
+        glFlush();
+
+  [4.2] Allocate RAM buffer and read entire screen from GPU:
+        pixels.resize(WIDTH * HEIGHT * 4);
+        glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, &pixels[0]);
+          --> Parameters:
+              0, 0             : Bottom-left starting screen pixel
+              WIDTH, HEIGHT    : Capture full 800 x 600 window
+              GL_RGBA          : 4 channels per pixel
+              GL_UNSIGNED_BYTE : 1 byte per channel (0..255)
+              &pixels[0]       : Destination buffer address in RAM
+
+  [4.3] Create iterative DFS stack and push seed point:
+        vector<Point> stack;
+        Point start; start.x = sx; start.y = sy;
+        stack.push_back(start);
+
+  [4.4] Process pixels until stack is empty:
+        while (!stack.empty()) {
+            Point p = stack.back();
+            stack.pop_back();
+            int x = p.x; int y = p.y;
+
+            // Stay safely inside 800x600 array bounds:
+            if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) continue;
+
+            // Compute 1D byte index for pixel (x, y):
+            int index = (y * WIDTH + x) * 4;
+
+            // Check if pixel matches White target color (255, 255, 255):
+            if (pixels[index] == 255 &&
+                pixels[index + 1] == 255 &&
+                pixels[index + 2] == 255) {
+
+                // Paint pixel opaque Red (255, 0, 0, 255):
+                pixels[index]     = 255; // Red
+                pixels[index + 1] = 0;   // Green
+                pixels[index + 2] = 0;   // Blue
+                pixels[index + 3] = 255; // Alpha
+
+                // Push 4 orthogonal neighbors onto stack:
+                stack.push_back({x + 1, y});
+                stack.push_back({x - 1, y});
+                stack.push_back({x, y + 1});
+                stack.push_back({x, y - 1});
+            }
+        }
+
+  [4.5] Mark fill done and trigger screen refresh:
+        filled = true;
+        cout << "Flood Fill completed!" << endl;
+        glutPostRedisplay();
+
+--------------------------------------------------------------------------------
+STEP 5: closePolygon() FUNCTION (Lines 128 - 144)
+--------------------------------------------------------------------------------
+  if (polygon.size() >= 3) {
+      polygonClosed = true;
+      fillMode = false;
+      cout << "Polygon closed." << endl;
+      glutPostRedisplay();
+  } else {
+      cout << "Select at least 3 points." << endl;
+  }
+
+--------------------------------------------------------------------------------
+STEP 6: mouse() CALLBACK FUNCTION (Lines 147 - 178)
+--------------------------------------------------------------------------------
+  void mouse(int button, int state, int x, int y)
+    --> Responds to GLUT_LEFT_BUTTON && GLUT_DOWN.
+    --> Converts top-left (x, y) to bottom-left pixel index:
+        int wx = x;
+        int wy = HEIGHT - 1 - y;
+    --> If !polygonClosed: pushes Point(wx, wy) to polygon vector.
+    --> Else if fillMode && !filled: validates bounds (0..WIDTH-1, 0..HEIGHT-1),
+        calls floodFill(wx, wy), and sets fillMode = false.
+    --> Calls glutPostRedisplay().
+
+--------------------------------------------------------------------------------
+STEP 7: keyboard() CALLBACK FUNCTION (Lines 181 - 208)
+--------------------------------------------------------------------------------
+  void keyboard(unsigned char key, int x, int y)
+    --> 'c' / 'C': Calls closePolygon().
+    --> 'f' / 'F': If polygonClosed && !filled, sets fillMode = true and
+                   prompts user to click inside the polygon.
+    --> 'r' / 'R': Calls polygon.clear(), pixels.clear(), resets all 3 bools
+                   to false, prints "Reset completed.".
+    --> Calls glutPostRedisplay().
+
+--------------------------------------------------------------------------------
+STEP 8: menu() RIGHT-CLICK CALLBACK FUNCTION (Lines 211 - 241)
+--------------------------------------------------------------------------------
+  void menu(int option)
+    --> Parameter option: Integer ID passed from glutAddMenuEntry():
+        case 1 -> closePolygon()
+        case 2 -> Enable fillMode (if polygonClosed && !filled)
+        case 3 -> Reset vectors & booleans, then glutPostRedisplay()
+        case 4 -> exit(0) (cleanly exits program)
+
+--------------------------------------------------------------------------------
+STEP 9: main() FUNCTION - RUNTIME ENTRY POINT (Lines 244 - 289)
+--------------------------------------------------------------------------------
+  [9.1] Prints title and 6 control instructions in terminal.
+  [9.2] glutInit(&argc, argv);
+  [9.3] glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
+  [9.4] glutInitWindowSize(WIDTH, HEIGHT); & glutInitWindowPosition(100, 100);
+  [9.5] glutCreateWindow("Flood Fill Algorithm");
+  [9.6] glClearColor(1.0, 1.0, 1.0, 1.0); --> Opaque White background.
+  [9.7] gluOrtho2D(0, WIDTH, 0, HEIGHT);  --> Bottom-left (0,0) to (800,600).
+  [9.8] Registers display, mouse, and keyboard callbacks.
+  [9.9] Creates right-click context menu:
+        glutCreateMenu(menu);
+        glutAddMenuEntry("Close Polygon", 1);
+        glutAddMenuEntry("Flood Fill", 2);
+        glutAddMenuEntry("Reset", 3);
+        glutAddMenuEntry("Exit", 4);
+        glutAttachMenu(GLUT_RIGHT_BUTTON);
+  [9.10] glutMainLoop(); --> Enters infinite event loop.
+
+
+================================================================================
+SECTION 4: 50 DETAILED VIVA QUESTIONS & ANSWERS
+================================================================================
+
+Q1: What is the Flood Fill algorithm?
+A: Flood Fill is a seed-based region-filling algorithm that starts from an
+   interior seed pixel and replaces all connected pixels having a specific
+   target (old) color with a new fill color.
+
+Q2: What is the main difference between Flood Fill and Boundary Fill?
+A: Flood Fill checks whether a pixel equals the OLD INTERIOR color (so it
+   works even if the polygon border has multiple colors). Boundary Fill checks
+   whether a pixel is neither the boundary color nor the fill color (so it
+   requires a single uniform boundary color).
+
+Q3: When is Flood Fill better than Boundary Fill?
+A: Whenever a region is enclosed by edges of different colors (such as a
+   multi-colored polygon or an image region in a paint app), because Boundary
+   Fill would leak through any edge that does not match its boundary color.
+
+Q4: What is a seed point?
+A: An initial pixel (sx, sy) selected inside the closed region from which the
+   fill spreads outward to connected neighbors.
+
+Q5: Explain 4-connected vs. 8-connected filling.
+A: 4-connected checks only the 4 orthogonal neighbors (right, left, up, down).
+   8-connected checks those 4 plus the 4 diagonal neighbors.
+
+Q6: Why does assignment3a.cpp use 4-connected fill instead of 8-connected?
+A: On thin slanted polygon borders, border pixels can touch only at corners.
+   An 8-connected fill could jump diagonally across the border and leak out
+   into the background, whereas 4-connected stays cleanly inside.
+
+Q7: What is one limitation of 4-connected filling?
+A: If an interior area narrows down to a 1-pixel diagonal corner connection,
+   4-connected fill cannot step diagonally across it and leaves that pocket
+   unfilled.
+
+Q8: Why did you use an iterative vector<Point> stack instead of recursion?
+A: Recursive Flood Fill creates a call-stack frame for every single pixel. An
+   800 x 600 window has 480,000 pixels, which overflows C++'s fixed call stack
+   and causes a Stack Overflow crash. A heap-allocated vector safely handles
+   large polygons.
+
+Q9: What graph traversal algorithm does floodFill() perform?
+A: Because it uses push_back() and pop_back() (Last-In, First-Out), it
+   performs an iterative Depth-First Search (DFS) across the pixel grid.
+
+Q10: What does glReadPixels() do, and what are its 7 parameters?
+A: glReadPixels(x, y, width, height, format, type, data) copies pixels from
+   the GPU frame buffer into CPU RAM. Here: (0, 0) bottom-left start, WIDTH x
+   HEIGHT size, GL_RGBA format, GL_UNSIGNED_BYTE (0..255) type, and &pixels[0]
+   destination address.
+
+Q11: What does glDrawPixels() do, and what are its 5 parameters?
+A: glDrawPixels(width, height, format, type, data) copies a pixel array from
+   CPU RAM back into the GPU frame buffer at the current raster position.
+
+Q12: Why is glRasterPos2i(0, 0) called right before glDrawPixels()?
+A: glDrawPixels() needs to know where on the window to anchor the bottom-left
+   corner of the image. Setting glRasterPos2i(0, 0) aligns our 800 x 600
+   buffer cleanly with the full window.
+
+Q13: Why is reading the whole screen ONCE with glReadPixels() much faster than
+     reading 1 pixel at a time?
+A: Every glReadPixels() call forces CPU-GPU synchronization. Doing it once in
+   assignment3a.cpp takes a few milliseconds, whereas calling it per pixel in
+   a loop stalls the GPU tens of thousands of times.
+
+Q14: Why is pixels resized to (WIDTH * HEIGHT * 4)?
+A: The screen has 800 * 600 = 480,000 pixels, and GL_RGBA stores 4 bytes per
+   pixel (Red, Green, Blue, Alpha), totaling 1,920,000 bytes (~1.83 MB).
+
+Q15: Explain the index formula: "int index = (y * WIDTH + x) * 4;".
+A: The 2D pixel grid is stored flat in a 1D array in row-major order starting
+   from the bottom row (y = 0). Skipping y full rows takes (y * WIDTH) pixels,
+   adding x moves horizontally, and multiplying by 4 gives the byte index of
+   that pixel's Red channel.
+
+Q16: What is stored at pixels[index], index+1, index+2, and index+3?
+A: Red, Green, Blue, and Alpha channel values respectively, each from 0 to 255.
+
+Q17: Why is vector<unsigned char> used instead of vector<char> or vector<int>?
+A: GL_UNSIGNED_BYTE uses 1 byte per channel in range 0..255. Signed char only
+   reaches 127 (so "== 255" would always be false), and int uses 4 bytes per
+   channel instead of 1.
+
+Q18: Why is GL_RGBA used in glReadPixels() even though display mode is GLUT_RGB?
+A: 4-byte RGBA pixels naturally align to 4-byte memory boundaries (matching
+   OpenGL's default packing alignment), preventing row-padding glitches that
+   can happen with 3-byte GL_RGB. OpenGL automatically fills Alpha with 255.
+
+Q19: Why does assignment3a.cpp use gluOrtho2D(0, WIDTH, 0, HEIGHT) instead of
+     (-400, 400, -300, 300)?
+A: Because glReadPixels() indexes pixels from (0, 0) at the bottom-left up to
+   (799, 599) at the top-right. Using (0, WIDTH, 0, HEIGHT) makes OpenGL
+   coordinates match pixel buffer indices 1-to-1.
+
+Q20: Why is mouse Y converted via "wy = HEIGHT - 1 - y" instead of "HEIGHT - y"?
+A: Mouse y goes from 0 (top) to 599 (bottom). HEIGHT - 1 - y maps 0 -> 599 and
+   599 -> 0, matching valid 0-indexed array rows [0, 599]. HEIGHT - y would
+   map y = 0 to 600, which is out of bounds.
+
+Q21: Why is the bounds check (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT)
+     essential inside floodFill()?
+A: If the fill ever reaches the window edge (for instance, if the user clicks
+   outside the polygon), skipping the bounds check would read/write outside
+   the pixels vector and crash with a Segmentation Fault.
+
+Q22: Explain "glBegin(polygonClosed ? GL_LINE_LOOP : GL_LINE_STRIP);".
+A: While the user is clicking vertices (polygonClosed == false), GL_LINE_STRIP
+   draws an open chain of edges. Once closed (polygonClosed == true),
+   GL_LINE_LOOP automatically adds the closing edge from last vertex to first.
+
+Q23: Why does closePolygon() check "if (polygon.size() >= 3)"?
+A: 1 point is a dot and 2 points form a line with zero interior area. You need
+   at least 3 vertices to enclose a fillable 2D polygon.
+
+Q24: Why does floodFill() call glClear(), drawPolygon(), and glFlush() before
+     glReadPixels()?
+A: To guarantee that a clean, freshly rendered black polygon on a white
+   background is sitting in the GPU frame buffer right before we copy it.
+
+Q25: What happens if you press 'F' and click OUTSIDE the closed polygon?
+A: The outside background is also white (255, 255, 255), so Flood Fill treats
+   the exterior as the target region and paints everything AROUND the polygon
+   red while leaving the inside white.
+
+Q26: What happens if you click directly ON the black polygon border after 'F'?
+A: Border pixels have RGB (0, 0, 0), which fails the white check immediately.
+   The loop pops it and ends with nothing filled.
+
+Q27: What would happen if the fill color were also white (255, 255, 255)?
+A: An infinite loop! Painting a white pixel white leaves it matching the target
+   check forever, continuously pushing neighbors until RAM runs out.
+
+Q28: Why does drawPolygon() set glLineWidth(2.0)?
+A: A 2-pixel-wide black border is visually clear and guarantees there are no
+   microscopic diagonal cracks for the fill to leak through.
+
+Q29: How does the right-click pop-up menu work in GLUT?
+A: glutCreateMenu(menu) creates the menu and links our callback,
+   glutAddMenuEntry("Label", id) registers each clickable option with an ID,
+   and glutAttachMenu(GLUT_RIGHT_BUTTON) attaches it to the right mouse button.
+
+Q30: What does "exit(0);" do in menu() option 4?
+A: Immediately terminates the program and closes the GLUT window, returning
+   exit status 0 (success) to the operating system.
+
+Q31: Why does display() check "if (filled)" instead of calling floodFill()
+     every time?
+A: display() runs whenever the OS repaints the window. Drawing the cached
+   pixels array via glDrawPixels() is instant and avoids recomputing the whole
+   flood fill repeatedly.
+
+Q32: What is the role of the three booleans polygonClosed, fillMode, filled?
+A: They control the step-by-step workflow:
+   - !polygonClosed: left-clicks add polygon vertices.
+   - polygonClosed && fillMode && !filled: left-click runs floodFill().
+   - filled: display() shows the filled pixel buffer until Reset.
+
+Q33: What happens if you press 'f' BEFORE closing the polygon with 'c'?
+A: Nothing happens, because keyboard() checks "if (polygonClosed && !filled)",
+   preventing you from flooding an open polygon across the entire screen.
+
+Q34: What happens when you press 'r' or 'R'?
+A: polygon.clear() and pixels.clear() empty both vectors, all three booleans
+   reset to false, and glutPostRedisplay() restores a blank white screen.
+
+Q35: Can Flood Fill fill concave polygons and star shapes accurately?
+A: Yes. Unlike OpenGL's GL_POLYGON (which only guarantees convex polygons),
+   Flood Fill operates purely on pixels and fills any closed shape accurately.
+
+Q36: What is the time complexity of floodFill()?
+A: O(N), where N is the number of interior pixels filled (worst case
+   O(WIDTH * HEIGHT)).
+
+Q37: What is the space complexity of floodFill()?
+A: O(WIDTH * HEIGHT) for the RGBA pixels buffer plus up to O(N) for the DFS
+   stack.
+
+Q38: Why can the stack briefly hold duplicate copies of the same pixel?
+A: Because a pixel is painted red only after it is POPPED from the stack.
+   While waiting in the stack, up to 3 other neighbors can still see it as
+   white and push it again. When popped later, it is already red and skipped.
+
+Q39: What does "&pixels[0]" pass to glReadPixels() and glDrawPixels()?
+A: The raw memory address (pointer to unsigned char) of the first byte inside
+   the contiguous std::vector<unsigned char> pixels array.
+
+Q40: What does "struct Point { int x, y; };" define?
+A: A lightweight custom data type bundling integer x and y coordinates
+   together so we can store them cleanly in vector<Point>.
+
+Q41: What does glClearColor(1.0, 1.0, 1.0, 1.0) do in main()?
+A: Sets opaque White as the screen clearing color, which also acts as the
+   white interior target color checked by floodFill().
+
+Q42: What does glClear(GL_COLOR_BUFFER_BIT) do?
+A: Wipes the GPU's color buffer and fills the window with white.
+
+Q43: Why is GLUT_SINGLE used with glFlush() here?
+A: Because the drawing is static between user interactions, so single
+   buffering with glFlush() is sufficient without needing double buffering.
+
+Q44: Why does mouse() check "button == GLUT_LEFT_BUTTON && state == GLUT_DOWN"?
+A: So vertices and seed points are only recorded on left mouse presses, not
+   releases (GLUT_UP) or right-clicks (which open the menu).
+
+Q45: What does glutPostRedisplay() do?
+A: Marks the window for redrawing so GLUT invokes display() on the next
+   event-loop iteration.
+
+Q46: What does glutInit(&argc, argv) do?
+A: Initializes GLUT and parses command-line flags; &argc lets GLUT modify the
+   count if flags are stripped, while argv is already a pointer.
+
+Q47: What does glutMainLoop() do?
+A: Enters GLUT's infinite event loop, waiting for mouse clicks, keyboard keys,
+   right-click menu selections, and redraw events.
+
+Q48: What happens if you resize the window by dragging its border?
+A: Since WIDTH = 800 and HEIGHT = 600 are fixed constants and there is no
+   reshape callback, glReadPixels/glDrawPixels and mouse Y-flipping will
+   misalign with the resized window.
+
+Q49: How would you change the fill color from red to blue in floodFill()?
+A: Change the 4 assignments inside the white check to:
+   pixels[index] = 0; pixels[index+1] = 0; pixels[index+2] = 255; pixels[index+3] = 255;
+
+Q50: What happens if you click inside the polygon AFTER it is already filled?
+A: Nothing happens, because mouse() checks "else if (fillMode && !filled)"
+   and filled is now true. You must press 'R' (or Reset in the menu) to start
+   a new polygon.

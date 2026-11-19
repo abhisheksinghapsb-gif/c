@@ -1,0 +1,669 @@
+================================================================================
+              EXPERIMENT 1: DDA LINE DRAWING ALGORITHM
+                        File: assignment1.cpp
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+  1. Quick Visual Overview (How the Program Flows)
+  2. 50-Point Complete Theory Breakdown
+  3. Step-by-Step Code Explanation (Start to End + Every Attribute & Parameter)
+  4. 50 Detailed Viva Questions & Answers
+
+
+================================================================================
+SECTION 1: QUICK VISUAL OVERVIEW (EXECUTION FLOW)
+================================================================================
+
+  START (main)
+     |
+     v
+  [1] Print console menu (1. Simple, 2. Dotted, 3. Dashed) --> Read lineStyle
+     |
+     v
+  [2] Initialize GLUT --> Open 800x600 window --> Set white background
+     |
+     v
+  [3] Set centered 2D graph using gluOrtho2D(-400, 400, -300, 300)
+     |
+     v
+  [4] Register callbacks: display(), mouse(), keyboard() --> Enter glutMainLoop()
+     |
+     +---> User Left-Clicks #1 --> mouse() converts (x,y) to (wx,wy)
+     |                             stores (startX, startY), clickCount = 1
+     |
+     +---> User Left-Clicks #2 --> mouse() converts (x,y) to (wx,wy)
+     |                             stores (endX, endY), clickCount = 2
+     |                             calls glutPostRedisplay()
+     |                                   |
+     |                                   v
+     |                             display() clears screen to white
+     |                                   --> drawAxes() draws gray X & Y axes
+     |                                   --> DDA() plots red line pixel-by-pixel
+     |                                   --> glFlush() pushes image to screen
+     |
+     +---> User Presses '1','2','3' or 'R' --> keyboard() updates lineStyle /
+                                               resets clickCount = 0 --> Redraw
+
+
+================================================================================
+SECTION 2: 50-POINT COMPLETE THEORY BREAKDOWN
+================================================================================
+
+ 1. Full Form: DDA stands for Digital Differential Analyzer, a raster
+    scan-conversion algorithm for drawing straight lines.
+
+ 2. Core Purpose: Converts a continuous mathematical line segment between two
+    endpoints (xa, ya) and (xb, yb) into discrete pixels on a computer screen.
+
+ 3. Why Scan Conversion Is Needed: A monitor is a grid of discrete pixels, so
+    a continuous mathematical line must be approximated by lighting up the
+    nearest integer pixels along its path.
+
+ 4. Incremental Algorithm: DDA calculates each new pixel by adding a constant
+    small increment to the previous pixel's position instead of re-solving the
+    line equation from scratch every time.
+
+ 5. Mathematical Basis: Derived from the straight-line slope-intercept equation
+    y = m*x + c, where slope m = dy / dx = (yb - ya) / (xb - xa).
+
+ 6. Differential Relations: Uses dy = m * dx (when stepping in x) and
+    dx = dy / m (when stepping in y).
+
+ 7. Driving Axis Rule: To avoid gaps in the line, DDA always steps by 1 unit
+    along whichever axis has the larger change (the dominant/driving axis).
+
+ 8. Case 1 - Gentle Slope (|m| <= 1): |dx| >= |dy|, so x steps by +1 or -1 and
+    y steps by +m or -m at every iteration.
+
+ 9. Case 2 - Steep Slope (|m| > 1): |dy| > |dx|, so y steps by +1 or -1 and
+    x steps by +(1/m) or -(1/m) at every iteration.
+
+10. Unified Steps Formula: Instead of separate if/else blocks for gentle and
+    steep slopes, the code calculates steps = max(abs(dx), abs(dy)).
+
+11. X-Increment Formula: xInc = (float)dx / steps. Automatically becomes +-1
+    for gentle slopes and +-(1/m) for steep slopes.
+
+12. Y-Increment Formula: yInc = (float)dy / steps. Automatically becomes +-m
+    for gentle slopes and +-1 for steep slopes.
+
+13. Zero-Length Guard: When both clicks are on the exact same pixel (dx = 0,
+    dy = 0), steps = 0. Dividing by 0 would crash, so DDA plots one single
+    point at (xa, ya) and returns immediately.
+
+14. Works in All 8 Octants: Because dx = xb - xa and dy = yb - ya keep their
+    signs while steps is always positive, xInc and yInc automatically become
+    negative when drawing right-to-left or top-to-bottom.
+
+15. Horizontal Lines (dy = 0): yInc = 0 and xInc = +-1, plotting a clean flat
+    horizontal line.
+
+16. Vertical Lines (dx = 0): xInc = 0 and yInc = +-1, completely avoiding the
+    infinite-slope (dy / 0) division crash of naive y = m*x + c code.
+
+17. 45-Degree Diagonal Lines (|dx| = |dy|): Both xInc and yInc equal +-1,
+    stepping one pixel diagonally each iteration.
+
+18. Floating-Point Arithmetic: Since xInc and yInc are usually decimals, the
+    running position (x, y) must be stored in float variables.
+
+19. Pixel Rounding: Screen pixels only exist at whole integer coordinates, so
+    round(x) and round(y) select the mathematically closest integer pixel.
+
+20. Why round() Instead of (int) Cast: Casting to int truncates decimals
+    toward zero (e.g., 4.9 -> 4), shifting the line unevenly. round() picks
+    the true nearest pixel symmetrically.
+
+21. Total Pixels Plotted: The loop runs from i = 0 to i <= steps, generating
+    (steps + 1) total pixels including both endpoints.
+
+22. Time Complexity: O(max(|dx|, |dy|)), which is linear with respect to the
+    pixel length of the line.
+
+23. Space Complexity: O(1) constant auxiliary space (only a few scalar
+    variables: dx, dy, steps, xInc, yInc, x, y).
+
+24. Advantage Over Direct y = m*x + c: Eliminates floating-point multiplication
+    inside the loop (uses only addition: x += xInc; y += yInc) and safely
+    handles vertical lines.
+
+25. Accumulated Rounding Error: Repeatedly adding a floating-point increment
+    over very long lines can accumulate tiny binary rounding drift.
+
+26. Performance Limitation: Floating-point addition and calling round() at
+    every single pixel are slower than purely integer operations.
+
+27. DDA vs. Bresenham's Algorithm: Bresenham uses only integer addition,
+    subtraction, and multiplication by 2 (no floats, no round()), making
+    Bresenham faster and better suited for hardware.
+
+28. Aliasing (Jaggies): Basic DDA turns pixels completely on or off, creating
+    a visible staircase effect ("jaggies") along slanted lines.
+
+29. Patterned Line Styles: Using the integer loop counter i inside the DDA
+    loop lets us easily turn pixels on and off to create Dotted and Dashed
+    lines without changing the DDA math.
+
+30. Simple Line (lineStyle == 1): Plots every single pixel from i = 0 to steps.
+
+31. Dotted Line (lineStyle == 2): Plots a pixel only when (i % 5 == 0), which
+    draws 1 pixel and skips the next 4 pixels repeatedly.
+
+32. Dashed Line (lineStyle == 3): Plots a pixel only when ((i / 10) % 2 == 0),
+    which draws 10 consecutive pixels (0..9), skips 10 (10..19), and repeats.
+
+33. Why x and y Always Update in Dotted/Dashed Mode: Even when a pixel is
+    skipped in Dotted or Dashed mode, x += xInc and y += yInc MUST still run
+    on every iteration so the line stays on its true path.
+
+34. Numerical Example Setup: Draw a line from (2, 3) to (6, 5).
+    --> dx = 6 - 2 = 4, dy = 5 - 3 = 2
+    --> steps = max(abs(4), abs(2)) = 4
+    --> xInc = 4.0 / 4 = 1.0, yInc = 2.0 / 4 = 0.5
+
+35. Numerical Example Trace:
+    --> i = 0: x = 2.0, y = 3.0 --> plot (2, 3)
+    --> i = 1: x = 3.0, y = 3.5 --> plot (3, 4)
+    --> i = 2: x = 4.0, y = 4.0 --> plot (4, 4)
+    --> i = 3: x = 5.0, y = 4.5 --> plot (5, 5)
+    --> i = 4: x = 6.0, y = 5.0 --> plot (6, 5)
+
+36. Two Coordinate Systems in OpenGL/GLUT:
+    --> Mouse system (GLUT): (0, 0) is at TOP-LEFT, Y increases DOWNWARD.
+    --> Drawing system (gluOrtho2D): (0, 0) is at CENTER, Y increases UPWARD.
+
+37. How Origin (0, 0) Is Placed at Center: Window size is 800 x 600. Calling
+    gluOrtho2D(-400, 400, -300, 300) splits width (-400..+400) and height
+    (-300..+300) symmetrically so (0, 0) sits right in the middle.
+
+38. Mouse-to-Cartesian Formula:
+    --> wx = x - 400  (shifts X center from 400 to 0)
+    --> wy = 300 - y  (shifts Y center from 300 to 0 AND flips Y upward)
+
+39. Role of GL_POINTS: Inside DDA(), GL_POINTS plots each pixel we calculated
+    manually, rather than letting OpenGL draw the line for us.
+
+40. Role of GL_LINES: Used only inside drawAxes() to draw the gray horizontal
+    X-axis and vertical Y-axis reference lines.
+
+41. Role of GLUT: GLUT (OpenGL Utility Toolkit) creates the OS window and
+    routes display, mouse, and keyboard events to our callback functions.
+
+42. Event-Driven Execution: After glutMainLoop() starts, the program stays
+    alive waiting for OS redraws, mouse clicks, or key presses instead of
+    ending immediately.
+
+43. Single Buffering (GLUT_SINGLE): Uses one color buffer; drawing goes
+    directly to the visible window and glFlush() forces it onto screen.
+    Ideal here because the line is static (not a 60 FPS animation).
+
+44. RGB Color Model (GLUT_RGB): Colors are specified using three floats
+    (Red, Green, Blue) from 0.0 (dark) to 1.0 (brightest).
+
+45. Clear Color vs. Clear Command: glClearColor(1, 1, 1, 1) chooses white as
+    the eraser color; glClear(GL_COLOR_BUFFER_BIT) actually wipes the color
+    buffer to white at the start of every display() call.
+
+46. Point Thickness (glPointSize): glPointSize(2.0) renders each plotted pixel
+    as a 2x2 square so the red DDA line is clearly visible.
+
+47. Mouse State Filtering: Checking (button == GLUT_LEFT_BUTTON && state ==
+    GLUT_DOWN) ensures we only record a point once on left press, not again
+    when the button is released (GLUT_UP).
+
+48. Interactive Style Switching: Users can choose the initial style in the
+    console, or switch styles live inside the window using keys 1, 2, 3,
+    and reset using R/r.
+
+49. Click State Machine (clickCount):
+    --> 0 = no clicks yet (waiting for start point)
+    --> 1 = start point saved (waiting for end point)
+    --> 2 = both points saved (display() draws the red DDA line)
+
+50. Practical Uses of DDA: Early pen/drum plotters, graphics education, and
+    grid-traversal raycasting (2D/3D Voxel DDA in games).
+
+
+================================================================================
+SECTION 3: STEP-BY-STEP CODE EXPLANATION (START TO END)
+================================================================================
+
+--------------------------------------------------------------------------------
+STEP 1: HEADER FILES & NAMESPACE (Lines 1 - 7)
+--------------------------------------------------------------------------------
+  #include <iostream>   --> Provides cout and cin for console menu & messages.
+  #include <GL/glut.h>  --> Loads OpenGL, GLU, and GLUT graphics/window APIs.
+  #include <cmath>      --> Provides round() to round float coordinates to int.
+  #include <algorithm>  --> Provides max() to find max(abs(dx), abs(dy)).
+  #include <cstdlib>    --> Provides abs() to compute integer absolute values.
+  using namespace std;  --> Lets us write cout, cin, max without std:: prefix.
+
+--------------------------------------------------------------------------------
+STEP 2: GLOBAL VARIABLES (Lines 9 - 12)
+--------------------------------------------------------------------------------
+  int startX, startY, endX, endY;
+    --> Store the Cartesian coordinates of the 1st click (start) and 2nd click
+        (end). They are global because GLUT's display() takes no arguments, so
+        mouse() writes them and display() reads them.
+
+  int clickCount = 0;
+    --> Tracks how many clicks have been recorded:
+        0 -> Waiting for start point
+        1 -> Start point recorded, waiting for end point
+        2 -> Both endpoints recorded; display() is allowed to call DDA()
+
+  int lineStyle = 1;
+    --> Stores the currently selected line style:
+        1 -> Simple (solid) line
+        2 -> Dotted line
+        3 -> Dashed line
+
+--------------------------------------------------------------------------------
+STEP 3: DDA() FUNCTION - THE LINE ALGORITHM (Lines 14 - 66)
+--------------------------------------------------------------------------------
+  Function Signature: void DDA(int xa, int ya, int xb, int yb)
+    --> Parameters:
+        xa, ya : integer Cartesian coordinates of starting point
+        xb, yb : integer Cartesian coordinates of ending point
+
+  [3.1] Compute horizontal and vertical change:
+        int dx = xb - xa;
+        int dy = yb - ya;
+          --> Signed differences so the line knows whether it goes left/right
+              and up/down.
+
+  [3.2] Compute total number of pixel steps:
+        int steps = max(abs(dx), abs(dy));
+          --> Picks whichever span is larger (X or Y) so neither increment
+              ever exceeds 1 pixel per step (prevents gaps).
+
+  [3.3] Handle zero-length line edge case:
+        if (steps == 0) {
+            glBegin(GL_POINTS);
+            glVertex2i(xa, ya);
+            glEnd();
+            return;
+        }
+          --> If user clicked the exact same pixel twice, steps is 0.
+              Plots that single dot and returns early to prevent divide-by-0.
+
+  [3.4] Compute per-step floating-point increments:
+        float xInc = (float)dx / steps;
+        float yInc = (float)dy / steps;
+          --> (float) type-cast is CRITICAL: without it, int / int performs
+              integer division and chops off decimals (e.g., 2 / 4 becomes 0).
+
+  [3.5] Initialize running floating-point position:
+        float x = xa;
+        float y = ya;
+          --> Starts exactly at the first clicked endpoint.
+
+  [3.6] Begin plotting individual pixels:
+        glBegin(GL_POINTS);
+          --> Parameter GL_POINTS tells OpenGL that every glVertex2i() inside
+              this block is an independent pixel dot.
+
+  [3.7] Loop through all (steps + 1) points:
+        for (int i = 0; i <= steps; i++) {
+          --> lineStyle == 1 (Simple Line):
+                glVertex2i(round(x), round(y));
+                --> Plots every pixel. glVertex2i takes 2 integers (2 = 2D,
+                    i = int). round() picks the nearest integer coordinate.
+          --> lineStyle == 2 (Dotted Line):
+                if (i % 5 == 0) glVertex2i(round(x), round(y));
+                --> Remainder is 0 on i = 0, 5, 10, 15... (1 pixel on, 4 off).
+          --> lineStyle == 3 (Dashed Line):
+                if ((i / 10) % 2 == 0) glVertex2i(round(x), round(y));
+                --> Integer division i / 10 gives:
+                    i = 0..9   -> 0 -> 0 % 2 == 0 -> DRAW (10 pixels)
+                    i = 10..19 -> 1 -> 1 % 2 == 1 -> SKIP (10 pixels)
+                    i = 20..29 -> 2 -> 2 % 2 == 0 -> DRAW (10 pixels)
+          --> Advance position for next iteration:
+                x += xInc;
+                y += yInc;
+        }
+        glEnd();
+          --> Closes the GL_POINTS block.
+
+--------------------------------------------------------------------------------
+STEP 4: drawAxes() FUNCTION (Lines 68 - 84)
+--------------------------------------------------------------------------------
+  glColor3f(0.5, 0.5, 0.5);
+    --> Sets drawing color to medium gray.
+        Parameters (r, g, b) are 3 floats in range 0.0 to 1.0.
+
+  glBegin(GL_LINES);
+    --> Parameter GL_LINES pairs every 2 vertices into one straight segment.
+    --> Pair 1 (X-axis): glVertex2i(-400, 0) to glVertex2i(400, 0)
+    --> Pair 2 (Y-axis): glVertex2i(0, -300) to glVertex2i(0, 300)
+  glEnd();
+
+--------------------------------------------------------------------------------
+STEP 5: display() CALLBACK FUNCTION (Lines 86 - 101)
+--------------------------------------------------------------------------------
+  glClear(GL_COLOR_BUFFER_BIT);
+    --> Parameter GL_COLOR_BUFFER_BIT tells OpenGL to wipe the GPU's color
+        buffer and fill every pixel with the color set by glClearColor (white).
+
+  drawAxes();
+    --> Redraws the gray X and Y axes (needed every frame because glClear
+        wiped the whole window).
+
+  if (clickCount == 2) {
+      glColor3f(1.0, 0.0, 0.0);
+      DDA(startX, startY, endX, endY);
+  }
+    --> Once both clicks are recorded, switches color to pure Red (1, 0, 0)
+        and draws the DDA line between (startX, startY) and (endX, endY).
+
+  glFlush();
+    --> Forces all queued OpenGL drawing commands to execute and render to the
+        single-buffered screen immediately.
+
+--------------------------------------------------------------------------------
+STEP 6: mouse() CALLBACK FUNCTION (Lines 103 - 129)
+--------------------------------------------------------------------------------
+  Function Signature: void mouse(int button, int state, int x, int y)
+    --> Parameters passed automatically by GLUT:
+        button : Which mouse button (GLUT_LEFT_BUTTON, GLUT_RIGHT_BUTTON, etc.)
+        state  : GLUT_DOWN (pressed) or GLUT_UP (released)
+        x, y   : Cursor position in GLUT's top-left pixel coordinates (0..800,
+                 0..600 with Y increasing downward)
+
+  if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+      int wx = x - 400;
+      int wy = 300 - y;
+        --> Converts GLUT top-left (x, y) to centered Cartesian (wx, wy):
+            Top-left  (0, 0)     --> (-400, +300)
+            Center    (400, 300) --> (0, 0)
+            Bot-right (800, 600) --> (+400, -300)
+
+      if (clickCount == 0) { startX = wx; startY = wy; clickCount = 1; }
+      else if (clickCount == 1) { endX = wx; endY = wy; clickCount = 2; }
+
+      glutPostRedisplay();
+        --> Signals GLUT to run display() on the next event-loop cycle.
+  }
+
+--------------------------------------------------------------------------------
+STEP 7: keyboard() CALLBACK FUNCTION (Lines 131 - 159)
+--------------------------------------------------------------------------------
+  Function Signature: void keyboard(unsigned char key, int x, int y)
+    --> Parameters passed automatically by GLUT:
+        key  : ASCII character of the pressed key
+        x, y : Mouse cursor coordinates when the key was pressed
+
+  --> key == '1' : lineStyle = 1; clickCount = 0; (Simple Line)
+  --> key == '2' : lineStyle = 2; clickCount = 0; (Dotted Line)
+  --> key == '3' : lineStyle = 3; clickCount = 0; (Dashed Line)
+  --> key == 'r' || key == 'R' : clickCount = 0; (Clears drawn line)
+  --> glutPostRedisplay(); triggers display() to refresh the window.
+
+--------------------------------------------------------------------------------
+STEP 8: main() FUNCTION - RUNTIME ENTRY POINT (Lines 161 - 208)
+--------------------------------------------------------------------------------
+  [8.1] Console menu prints options 1, 2, 3 and reads lineStyle via cin.
+        If lineStyle < 1 || lineStyle > 3, prints warning and sets lineStyle=1.
+
+  [8.2] glutInit(&argc, argv);
+        --> Initializes GLUT.
+            &argc : Address of argument count so GLUT can reduce it if it
+                    extracts any command-line GLUT flags.
+            argv  : Pointer array of command-line strings.
+
+  [8.3] glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
+        --> Bitwise OR combines two flags:
+            GLUT_SINGLE : Single frame buffer (paired with glFlush)
+            GLUT_RGB    : Red-Green-Blue color mode
+
+  [8.4] glutInitWindowSize(800, 600);
+        --> Sets window width = 800 pixels, height = 600 pixels.
+
+  [8.5] glutInitWindowPosition(100, 100);
+        --> Places window top-left corner at x = 100, y = 100 on the monitor.
+
+  [8.6] glutCreateWindow("DDA Line Drawing Algorithm");
+        --> Opens the OS window with the given title bar string.
+
+  [8.7] glClearColor(1.0, 1.0, 1.0, 1.0);
+        --> Sets background eraser color to opaque White (R=1, G=1, B=1, A=1).
+
+  [8.8] gluOrtho2D(-400, 400, -300, 300);
+        --> Parameters: (left, right, bottom, top).
+            Maps X to [-400, +400] and Y to [-300, +300], putting (0, 0) at
+            the exact center of the 800x600 window.
+
+  [8.9] glPointSize(2.0);
+        --> Sets diameter of GL_POINTS pixels to 2.0 screen pixels.
+
+  [8.10] Register callbacks:
+         glutDisplayFunc(display);
+         glutMouseFunc(mouse);
+         glutKeyboardFunc(keyboard);
+
+  [8.11] glutMainLoop();
+         --> Starts GLUT's infinite event-processing loop.
+
+
+================================================================================
+SECTION 4: 50 DETAILED VIVA QUESTIONS & ANSWERS
+================================================================================
+
+Q1: What does DDA stand for?
+A: DDA stands for Digital Differential Analyzer. It is an incremental raster
+   scan-conversion algorithm used to draw a straight line between two points.
+
+Q2: Why do we need line drawing algorithms in computer graphics?
+A: A mathematical line is continuous, while a monitor screen is a discrete
+   grid of pixels. Line drawing algorithms decide which exact pixels to turn
+   on so the result best approximates a straight line.
+
+Q3: What is the basic principle of the DDA algorithm?
+A: It uses the differential line relation dy = m * dx to step 1 unit at a time
+   along the axis with the larger change and add a constant increment to the
+   other coordinate at every step.
+
+Q4: Why is steps = max(abs(dx), abs(dy)) used in assignment1.cpp?
+A: It selects the longer span (either X or Y) as the driving axis. This ensures
+   neither xInc nor yInc exceeds 1 in magnitude, preventing visible gaps in
+   steep lines.
+
+Q5: What happens if you always step along X by 1 even for steep lines (|m| > 1)?
+A: For steep lines, Y changes by more than 1 pixel per X step, leaving broken
+   vertical gaps between plotted pixels.
+
+Q6: Why do we cast (float)dx / steps instead of writing dx / steps?
+A: Because dx and steps are both int. In C++, int / int performs integer
+   division and throws away decimals (e.g., 2 / 4 becomes 0). Casting to float
+   forces floating-point division so fractional increments (0.5) are preserved.
+
+Q7: Why is there an "if (steps == 0)" check inside DDA()?
+A: If the user clicks the exact same pixel twice, dx = 0 and dy = 0, making
+   steps = 0. Dividing by steps would cause division by zero. The check safely
+   plots that single pixel and returns early.
+
+Q8: Why do we use round(x) and round(y) instead of (int)x and (int)y?
+A: Casting to int truncates decimals toward zero (4.9 becomes 4), shifting the
+   line asymmetrically. round() selects the mathematically nearest pixel.
+
+Q9: How many pixels does the loop "for (int i = 0; i <= steps; i++)" plot?
+A: It runs from 0 through steps inclusive, plotting (steps + 1) pixels so both
+   the start endpoint and the end endpoint are included.
+
+Q10: Does assignment1.cpp work if you draw right-to-left or top-to-bottom?
+A: Yes. Because dx = xb - xa and dy = yb - ya keep their negative signs while
+   steps is positive (using abs()), xInc and yInc automatically become negative
+   and step cleanly in any of the 8 octants.
+
+Q11: How does DDA handle a vertical line (xa == xb)?
+A: dx = 0 and steps = abs(dy), so xInc = 0 and yInc = +1 or -1. It draws a
+   perfect vertical line without any divide-by-zero slope crash.
+
+Q12: How does DDA handle a horizontal line (ya == yb)?
+A: dy = 0 and steps = abs(dx), so xInc = +1 or -1 and yInc = 0.
+
+Q13: What is the time complexity of DDA?
+A: O(max(|dx|, |dy|)), linear with respect to the line's length in pixels.
+
+Q14: What is the space complexity of DDA?
+A: O(1) constant auxiliary space, using only a few scalar variables.
+
+Q15: What is the main advantage of DDA over the direct equation y = m*x + c?
+A: DDA eliminates floating-point multiplication inside the loop (using only
+   addition: x += xInc; y += yInc) and naturally handles vertical lines.
+
+Q16: What are the main disadvantages of DDA?
+A: It relies on floating-point addition and round() at every pixel (slower than
+   integer math), and repeated float additions can accumulate tiny rounding
+   drift on very long lines.
+
+Q17: How is Bresenham's algorithm better than DDA?
+A: Bresenham's algorithm uses only integer addition, subtraction, and
+   multiplication by 2. It avoids floats and round() completely, making it
+   faster and exact.
+
+Q18: How is the Dotted Line implemented in assignment1.cpp?
+A: Inside the DDA loop, a point is plotted only when "if (i % 5 == 0)", which
+   draws 1 pixel and skips the next 4 pixels repeatedly.
+
+Q19: How is the Dashed Line implemented in assignment1.cpp?
+A: Using "if ((i / 10) % 2 == 0)". For i = 0..9, i/10 is 0 (even -> draw); for
+   i = 10..19, i/10 is 1 (odd -> skip); repeating 10 pixels on, 10 pixels off.
+
+Q20: In Dotted or Dashed mode, why must x += xInc and y += yInc stay OUTSIDE
+     the if-blocks?
+A: Because x and y must advance along the line path on every step i, even when
+   a gap pixel is skipped; otherwise the line would stop advancing.
+
+Q21: What is aliasing ("jaggies")?
+A: The jagged, stair-step appearance of diagonal or slanted raster lines caused
+   by sampling a continuous line onto a discrete pixel grid.
+
+Q22: What is scan conversion (rasterization)?
+A: The process of converting geometric shapes defined by math coordinates into
+   discrete illuminated pixels inside the frame buffer.
+
+Q23: What is a frame buffer?
+A: A dedicated block of GPU memory (VRAM) that stores the color values of every
+   pixel displayed on the screen.
+
+Q24: What is OpenGL?
+A: Open Graphics Library -- a cross-platform API used to render 2D and 3D
+   graphics using the graphics hardware.
+
+Q25: What is GLUT and why is it used?
+A: OpenGL Utility Toolkit -- a helper library that handles window creation,
+   display buffers, and user input callbacks (mouse and keyboard), which core
+   OpenGL does not provide.
+
+Q26: What do &argc and argv mean in glutInit(&argc, argv)?
+A: argc is the command-line argument count (int) and argv is the array of
+   argument strings (char**). We pass &argc (address of argc) so GLUT can
+   decrease the count if it removes any GLUT flags; argv is already a pointer.
+
+Q27: Explain glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB).
+A: GLUT_SINGLE requests a single frame buffer (used with glFlush() for static
+   drawings), and GLUT_RGB selects the Red-Green-Blue color model.
+
+Q28: Why do we use GLUT_SINGLE instead of GLUT_DOUBLE here?
+A: Because the screen only redraws when the user clicks or presses a key (no
+   continuous animation), so single buffering with glFlush() is sufficient and
+   does not need a second back buffer.
+
+Q29: What does glClearColor(1.0, 1.0, 1.0, 1.0) do?
+A: It sets the background eraser color to opaque White (R=1, G=1, B=1, A=1).
+   It only configures the color; it does not clear the screen by itself.
+
+Q30: What does glClear(GL_COLOR_BUFFER_BIT) do?
+A: It clears the GPU's color buffer and fills every pixel on screen with the
+   white color previously configured by glClearColor().
+
+Q31: How did you make the center of the pop-up window (0, 0)?
+A: Using gluOrtho2D(-400, 400, -300, 300) on the 800 x 600 window. Because
+   -400..+400 and -300..+300 are symmetric around 0, OpenGL maps (0, 0) to the
+   exact center pixel of the window.
+
+Q32: Why do we convert mouse coordinates with wx = x - 400 and wy = 300 - y?
+A: GLUT reports mouse clicks with (0, 0) at the top-left and Y going downward.
+   Our graph has (0, 0) at the center and Y going upward. Subtracting 400
+   shifts X to the center, and (300 - y) both shifts Y to the center and flips
+   it upward.
+
+Q33: What happens if you forget to flip Y (writing wy = y - 300)?
+A: Clicking in the top half of the window would draw in the bottom half, and
+   clicking in the bottom half would draw in the top half (vertically inverted).
+
+Q34: Why is GL_POINTS used inside DDA() instead of GL_LINES?
+A: Because the experiment's goal is to compute and illuminate each individual
+   pixel manually using the DDA algorithm. GL_LINES would let OpenGL draw the
+   line automatically.
+
+Q35: Where IS GL_LINES used in assignment1.cpp?
+A: Inside drawAxes(), to draw the gray X-axis (-400,0 to 400,0) and Y-axis
+   (0,-300 to 0,300).
+
+Q36: What does glVertex2i(x, y) mean?
+A: "2" means 2D coordinates (x, y) and "i" means integer (GLint). We use 2i
+   here because round(x) and round(y) produce integer pixel positions.
+
+Q37: What does glColor3f(1.0, 0.0, 0.0) mean?
+A: "3" means 3 channels (Red, Green, Blue) and "f" means float values from 0.0
+   to 1.0. (1.0, 0.0, 0.0) sets the drawing color to pure Red.
+
+Q38: What does glPointSize(2.0) do?
+A: Sets the diameter of each GL_POINTS dot to 2.0 screen pixels so the drawn
+   DDA line is thicker and easier to see.
+
+Q39: What does glFlush() do at the end of display()?
+A: OpenGL queues drawing commands in a buffer. glFlush() forces all queued
+   commands to execute immediately so the drawing actually appears on the
+   single-buffered window.
+
+Q40: What does glutPostRedisplay() do?
+A: It flags the window as needing a redraw so GLUT automatically invokes
+   display() on the next cycle of glutMainLoop().
+
+Q41: Why don't we call display() directly inside mouse() or keyboard()?
+A: Calling display() directly bypasses GLUT's event loop and can cause redraw
+   glitches. glutPostRedisplay() safely schedules the redraw through GLUT.
+
+Q42: What does glutMainLoop() do?
+A: Enters GLUT's infinite event-processing loop, keeping the window open and
+   routing redraw, mouse, and keyboard events to the registered callbacks.
+
+Q43: What are callback functions in GLUT?
+A: Functions written by the programmer (display, mouse, keyboard) whose names
+   are registered with GLUT (glutDisplayFunc, glutMouseFunc, glutKeyboardFunc)
+   so GLUT calls them automatically whenever an event occurs.
+
+Q44: Why does mouse() check "state == GLUT_DOWN"?
+A: Every single mouse click fires two events: press (GLUT_DOWN) and release
+   (GLUT_UP). Checking GLUT_DOWN ensures we record the click only once.
+
+Q45: What happens in assignment1.cpp if you click a 3rd time without pressing R?
+A: Nothing changes, because mouse() only checks "if (clickCount == 0)" and
+   "else if (clickCount == 1)". You must press R (or 1, 2, 3) to reset
+   clickCount to 0.
+
+Q46: Why does keyboard() reset clickCount = 0 when pressing '1', '2', or '3'?
+A: So the previously drawn line clears from the screen and the program is
+   ready for two fresh mouse clicks in the newly selected line style.
+
+Q47: What happens if you enter 7 in the console menu at startup?
+A: The check "if (lineStyle < 1 || lineStyle > 3)" catches the invalid input,
+   prints "Invalid choice! Selecting Simple Line.", and sets lineStyle = 1.
+
+Q48: Why does display() call drawAxes() on every redraw?
+A: Because glClear(GL_COLOR_BUFFER_BIT) wipes the entire window to white every
+   time display() runs, so the gray axes must be redrawn every frame.
+
+Q49: Why is the window 800 x 600 and gluOrtho2D(-400, 400, -300, 300)?
+A: Both span 800 units horizontally and 600 units vertically, giving an exact
+   1:1 pixel-to-unit ratio with zero stretching or distortion.
+
+Q50: Trace the DDA values for a line from (0, 0) to (4, 8).
+A: dx = 4, dy = 8, steps = max(4, 8) = 8.
+   xInc = 4.0 / 8 = 0.5, yInc = 8.0 / 8 = 1.0.
+   The loop plots 9 pixels: (0,0), (1,1), (1,2), (2,3), (2,4), (3,5), (3,6),
+   (4,7), (4,8).

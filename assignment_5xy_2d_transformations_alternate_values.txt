@@ -1,0 +1,443 @@
+================================================================================
+   EXPERIMENT 5xy: 2D TRANSFORMATIONS - ALTERNATE PARAMETERS (OOP)
+                       File: assignment5xy.cpp
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+  1. Quick Visual Overview (How assignment5xy.cpp Flows & Differs from Exp 5)
+  2. 50-Point Complete Theory Breakdown (With Exact 5xy Calculations)
+  3. Step-by-Step Code Explanation (Start to End + Every Attribute & Parameter)
+  4. 50 Detailed Viva Questions & Answers
+
+
+================================================================================
+SECTION 1: QUICK VISUAL OVERVIEW (EXECUTION FLOW)
+================================================================================
+
+  START (main)
+     |
+     v
+  [1] Print Console Menu:
+      1. Translation (tx=80, ty=150)   |  2. Rotation (35 deg)
+      3. Scaling (factor 1.7)          |  0. Reset (Original Square Only)
+     |
+     v
+  [2] Read local choice via cin --> Validate (if outside 0..3 -> return 0)
+     |
+     v
+  [3] Open 800x600 GLUT window --> init() sets BLACK bg + centered (-400..400,
+      -300..300) graph --> Copy local choice to global ::choice = choice
+     |
+     v
+  [4] Enter glutMainLoop() --> GLUT calls display():
+      [a] glClear(GL_COLOR_BUFFER_BIT) --> paints background BLACK
+      [b] Draw Gray X & Y axes
+      [c] Draw WHITE original square: (-50,-50), (50,-50), (50,50), (-50,50)
+      [d] Loop i = 0..3 using Point overloaded operators:
+            choice == 1 --> result[i] = original[i] + Point(80, 150)
+            choice == 2 --> result[i] = original[i] ^ 35
+            choice == 3 --> result[i] = original[i] * 1.7
+      [e] If choice != 0 --> draw GREEN result square
+      [f] glFlush() pushes image to screen
+
+
+================================================================================
+SECTION 2: 50-POINT COMPLETE THEORY BREAKDOWN
+================================================================================
+
+ 1. Purpose of assignment5xy.cpp: Demonstrates the exact same C++ operator
+    overloading 2D Transformation framework as assignment5.cpp, tested with a
+    second set of non-uniform translation shifts (tx != ty), an acute 35-deg
+    rotation, and a fractional scaling factor (1.7).
+
+ 2. Direct Parameter Comparison vs. assignment5.cpp:
+    --> Translation : tx = 80, ty = 150  (vs. 100, 100 in assignment5.cpp)
+    --> Rotation    : angle = 35 degrees (vs. 70 degrees in assignment5.cpp)
+    --> Scaling     : factor = 1.7       (vs. 2.0 in assignment5.cpp)
+
+ 3. Asymmetric Translation (tx != ty): Moving X by 80 and Y by 150 shifts the
+    square almost twice as far upward as rightward, proving operator+ handles
+    independent X and Y shifts cleanly.
+
+ 4. Fractional Scaling Factor (1.7): Unlike integer scaling (2.0), multiplying
+    by 1.7 tests why float coordinates in Point and glVertex2f() are essential
+    to avoid rounding errors.
+
+ 5. Vertex-Only Transformation: Transforming only the 4 corner vertices of the
+    square and redrawing with GL_LINE_LOOP transforms the entire shape.
+
+ 6. Rigid-Body Transformations: Translation (80, 150) and Rotation (35 deg)
+    keep side length = 100 and all 90-degree corners unchanged.
+
+ 7. Non-Rigid Transformation: Scaling by 1.7 enlarges the side length from 100
+    to 170 and increases the area by 1.7^2 = 2.89x (from 10,000 to 28,900).
+
+ 8. Translation Equations: x' = x + 80, y' = y + 150.
+
+ 9. Exact Translated Corners (choice == 1):
+    --> (-50, -50) + (80, 150) = ( 30, 100)
+    --> ( 50, -50) + (80, 150) = (130, 100)
+    --> ( 50,  50) + (80, 150) = (130, 200)
+    --> (-50,  50) + (80, 150) = ( 30, 200)
+    Notice the entire translated square lands cleanly inside Quadrant 1!
+
+10. Uniform Scaling Equations: x' = x * 1.7, y' = y * 1.7.
+
+11. Exact Scaled Corners (choice == 3):
+    --> (-50, -50) * 1.7 = (-85.0, -85.0)
+    --> ( 50, -50) * 1.7 = ( 85.0, -85.0)
+    --> ( 50,  50) * 1.7 = ( 85.0,  85.0)
+    --> (-50,  50) * 1.7 = (-85.0,  85.0)
+
+12. Rotation Equations (CCW About Origin):
+    --> rad = 35 * 3.14159 / 180.0 = 0.610865 radians
+    --> cos(35 deg) = 0.81915,  sin(35 deg) = 0.57358
+    --> x' = x * cos(rad) - y * sin(rad)
+    --> y' = x * sin(rad) + y * cos(rad)
+
+13. Exact Rotated Corners (choice == 2, 35 deg CCW):
+    --> (-50, -50) -> (-12.28, -69.64)
+    --> ( 50, -50) -> ( 69.64, -12.28)
+    --> ( 50,  50) -> ( 12.28,  69.64)
+    --> (-50,  50) -> (-69.64,  12.28)
+
+14. Why Degrees (35) Are Converted to Radians Inside operator^: Humans read
+    35 degrees intuitively, while C++ <cmath> sin() and cos() strictly expect
+    radians.
+
+15. Angle Sign Convention: +35 rotates Counter-Clockwise (CCW); -35 would
+    rotate Clockwise (CW).
+
+16. Origin-Centered Symmetry: Because the original square's center is at
+    (0, 0), scaling by 1.7 and rotating by 35 deg both happen cleanly in place
+    around the square's center.
+
+17. Arbitrary Pivot Rotation Formula: M = T(xp, yp) * R(35) * T(-xp, -yp).
+
+18. Arbitrary Fixed-Point Scaling Formula: M = T(xf, yf) * S(1.7, 1.7) *
+    T(-xf, -yf).
+
+19. Why Homogeneous Coordinates Exist: Representing (x, y) as [x, y, 1]^T
+    unifies Translation, Rotation, and Scaling into 3x3 matrix multiplications.
+
+20. 3x3 Homogeneous Matrices for assignment5xy.cpp:
+    T(80, 150):         S(1.7, 1.7):        R(35 deg):
+    [ 1  0   80 ]       [ 1.7  0    0 ]     [ 0.819  -0.574  0 ]
+    [ 0  1  150 ]       [  0  1.7   0 ]     [ 0.574   0.819  0 ]
+    [ 0  0   1  ]       [  0   0    1 ]     [   0       0    1 ]
+
+21. Composite Transformations: Multiplying 3x3 matrices together combines
+    multiple steps into one matrix M applied in a single pass.
+
+22. Non-Commutativity: In general, T(80, 150) * R(35) != R(35) * T(80, 150).
+
+23. Inverse Operations for assignment5xy.cpp:
+    --> Undo Translation : Point(-80, -150)
+    --> Undo Rotation    : ^ (-35)
+    --> Undo Scaling     : * (1.0 / 1.7)
+
+24. Other Two Standard 2D Transformations: Reflection (mirroring across axes
+    or y = x) and Shearing (slanting along X or Y).
+
+25. Operator Overloading in C++: Compile-time polymorphism allowing +, *, and
+    ^ to operate directly on custom Point objects.
+
+26. Overloaded Operators in Point:
+    --> operator+(Point p)     : Translation
+    --> operator*(float s)     : Uniform Scaling
+    --> operator^(float angle) : Rotation in degrees
+
+27. Why Point::operator+ Does Not Mutate original[i]: Constructs and returns a
+    new Point stored into result[i], preserving original[i] for comparison.
+
+28. Default Constructor Parameters: Point(float a = 0, float b = 0) lets
+    "Point result[4];" initialize cleanly without a separate 0-arg constructor.
+
+29. Variable Shadowing & "::choice = choice;": Local int choice in main()
+    hides global int choice = 0; unary scope operator :: copies local choice
+    into global ::choice so display() reads the selected option.
+
+30. Why Global State Is Used: GLUT's glutDisplayFunc(display) strictly takes
+    a parameterless void display() function.
+
+31. Operator Precedence Note: Bitwise XOR (^) has lower precedence than + and
+    *; always wrap rotations in parentheses if chaining transforms.
+
+32. Non-Overloadable C++ Operators: ::, ., .*, ?:, sizeof, typeid.
+
+33. Visual Color Coding: Black background (0,0,0,1), Gray axes (0.5,0.5,0.5),
+    White original square (1,1,1), Green transformed square (0,1,0).
+
+34. Wireframe Overlap Advantage: GL_LINE_LOOP draws hollow borders so the
+    green 1.7x square or 35-deg rotated square never hides the white square.
+
+35. Centered Coordinate System: gluOrtho2D(-400, 400, -300, 300) puts (0, 0)
+    at the centre of the 800 x 600 window.
+
+36. Screen Bounds Check: Even after translating by (80, 150), max vertex is
+    (130, 200), sitting safely inside [-400..400, -300..300].
+
+37. User-Defined init() Function: Runs once after glutCreateWindow() to set
+    the black background and centered 2D orthographic projection.
+
+38. Reset Option (choice == 0): Skips drawing result[] ("if(choice != 0)") so
+    only the original white square and gray axes appear.
+
+39. Invalid Input Validation: Typing anything outside 0..3 prints "Invalid
+    Choice!" and returns 0 cleanly without opening a GLUT window.
+
+40. Float Precision: glVertex2f(p[i].x, p[i].y) preserves fractional rotated
+    coordinates like 69.64 and -12.28.
+
+41. Single Buffering (GLUT_SINGLE): Paired with glFlush() because the display
+    is static once drawn.
+
+42. Built-In OpenGL GPU Alternatives: glTranslatef(80, 150, 0),
+    glRotatef(35, 0, 0, 1), and glScalef(1.7, 1.7, 1.0).
+
+43. Why Manual Math Is Used Here: Demonstrates the exact 2D transformation
+    equations and C++ operator overloading on the CPU.
+
+44. Console Confirmation Output: Prints exact selected values (tx=80, ty=150 |
+    35 degrees | factor 1.7) before launching the window.
+
+45. Time Complexity: O(N) for N vertices (here N = 4, constant time).
+
+46. Space Complexity: O(N) storing original[4] and result[4].
+
+47. Why 1.7 * original[i] Fails While original[i] * 1.7 Works: Member
+    operator* requires a Point object on the left-hand side.
+
+48. Double-to-Float Literal Note: 1.7 is a double literal in C++ that
+    implicitly converts to float parameter s in operator*(float s).
+
+49. Why main() Reads cin Before glutMainLoop(): glutMainLoop() never returns,
+    so console input must happen before entering GLUT's event loop.
+
+50. Real-World Applications: 2D sprite transforms, UI scaling/rotation, CAD
+    part placement, and robotics pose calculation.
+
+
+================================================================================
+SECTION 3: STEP-BY-STEP CODE EXPLANATION (START TO END)
+================================================================================
+
+--------------------------------------------------------------------------------
+STEP 1: HEADERS & class Point (Lines 1 - 41)
+--------------------------------------------------------------------------------
+  Includes <GL/glut.h>, <iostream>, <cmath> and using namespace std;.
+  class Point defines public float x, y; default constructor Point(a=0, b=0);
+  and 3 overloaded operators:
+    --> operator+(Point p)     : returns Point(x + p.x, y + p.y)
+    --> operator*(float s)     : returns Point(x * s, y * s)
+    --> operator^(float angle) : converts degrees -> radians, returns rotated Point.
+
+--------------------------------------------------------------------------------
+STEP 2: GLOBALS & drawSquare() (Lines 44 - 66)
+--------------------------------------------------------------------------------
+  Point original[4] = { (-50,-50), (50,-50), (50,50), (-50,50) };
+  Point result[4];
+  int choice = 0;
+  drawSquare(Point p[], float r, float g, float b): sets glColor3f(r, g, b)
+  and draws all 4 vertices as a closed wireframe GL_LINE_LOOP via glVertex2f().
+
+--------------------------------------------------------------------------------
+STEP 3: display() CALLBACK FUNCTION (Lines 69 - 109)
+--------------------------------------------------------------------------------
+  [3.1] glClear(GL_COLOR_BUFFER_BIT); --> clears screen to Black.
+  [3.2] Draws gray X & Y axes using GL_LINES.
+  [3.3] Draws White original square via drawSquare(original, 1, 1, 1).
+  [3.4] Loops i = 0..3 with assignment5xy.cpp parameters:
+        choice == 1 --> result[i] = original[i] + Point(80, 150);
+        choice == 2 --> result[i] = original[i] ^ 35;
+        choice == 3 --> result[i] = original[i] * 1.7;
+  [3.5] If (choice != 0) drawSquare(result, 0, 1, 0); --> Green result square.
+  [3.6] glFlush();
+
+--------------------------------------------------------------------------------
+STEP 4: init() & main() RUNTIME FLOW (Lines 112 - 181)
+--------------------------------------------------------------------------------
+  init(): glClearColor(0, 0, 0, 1); gluOrtho2D(-400, 400, -300, 300);
+  main():
+    [1] Declares local int choice; prints menu; reads cin >> choice.
+    [2] Confirms selected operation (tx=80, ty=150 | 35 deg | 1.7); returns 0
+        if invalid.
+    [3] Opens 800x600 window at (100, 50) with GLUT_SINGLE | GLUT_RGB.
+    [4] Calls init(), registers display, copies "::choice = choice;".
+    [5] Calls glutMainLoop().
+
+
+================================================================================
+SECTION 4: 50 DETAILED VIVA QUESTIONS & ANSWERS
+================================================================================
+
+Q1: What is the difference between assignment5xy.cpp and assignment5.cpp?
+A: Both share the exact same Point class, overloaded operators, and OpenGL
+   rendering code; only the hardcoded parameters differ: assignment5xy.cpp
+   uses Translation (80, 150), Rotation 35 deg, and Scaling 1.7 (instead of
+   (100, 100), 70 deg, and 2.0).
+
+Q2: What are the 4 transformed vertices for Translation (80, 150)?
+A: (30, 100), (130, 100), (130, 200), and (30, 200).
+
+Q3: Which quadrant does the translated square land in?
+A: Entirely inside Quadrant 1 (all X > 0 and all Y > 0).
+
+Q4: What are the 4 transformed vertices for Scaling by 1.7?
+A: (-85, -85), (85, -85), (85, 85), and (-85, 85).
+
+Q5: What are the new side length and area after scaling by 1.7?
+A: New side length = 100 * 1.7 = 170; new area = 10,000 * 1.7^2 = 28,900.
+
+Q6: What is 35 degrees in radians?
+A: 35 * 3.14159 / 180.0 = 0.610865 radians.
+
+Q7: Calculate the rotated position of vertex (50, 50) at 35 degrees CCW.
+A: cos(35) = 0.8192, sin(35) = 0.5736.
+   x' = 50(0.8192) - 50(0.5736) = 12.28; y' = 50(0.5736) + 50(0.8192) = 69.64.
+
+Q8: Does Translation (80, 150) change the square's size or angles?
+A: No -- Translation is a rigid-body transformation.
+
+Q9: Does Rotation by 35 degrees change the square's size or area?
+A: No -- Rotation is a rigid-body transformation (side stays 100, area 10,000).
+
+Q10: Does Scaling by 1.7 change the square's shape (aspect ratio)?
+A: It changes size (non-rigid), but preserves aspect ratio because it is
+   uniform scaling (sx = sy = 1.7).
+
+Q11: Why do we convert 35 degrees to radians inside operator^?
+A: C++ <cmath> sin() and cos() strictly accept radians, while degrees are
+   clearer for humans to read and pass.
+
+Q12: What is operator overloading?
+A: A C++ compile-time polymorphism feature redefining built-in operators
+   (+, *, ^) for custom classes like Point.
+
+Q13: Which operators are overloaded in Point and what do they represent?
+A: + for Translation, * for Uniform Scaling, and ^ for Rotation.
+
+Q14: What does "original[i] ^ 35" invoke internally?
+A: original[i].operator^(35.0f).
+
+Q15: Why does Point(float a = 0, float b = 0) need default values?
+A: So "Point result[4];" can default-construct 4 empty Point objects.
+
+Q16: Explain the line "::choice = choice;" in main().
+A: Copies main()'s local choice variable into the shadowed global ::choice
+   variable using the unary scope resolution operator :: so display() sees it.
+
+Q17: What happens if you omit "::choice = choice;"?
+A: Global choice stays 0, so only the white original square ever appears.
+
+Q18: Why must original[4], result[4], and choice be global?
+A: GLUT's display() callback cannot take parameters, so it reads global state.
+
+Q19: What are homogeneous coordinates?
+A: Representing 2D (x, y) as [x, y, 1]^T so Translation, Rotation, and Scaling
+   all become 3x3 matrix multiplications.
+
+Q20: Write the 3x3 Translation matrix for tx = 80, ty = 150.
+A: Row 1: [1, 0, 80], Row 2: [0, 1, 150], Row 3: [0, 0, 1].
+
+Q21: Write the 3x3 Scaling matrix for s = 1.7.
+A: Row 1: [1.7, 0, 0], Row 2: [0, 1.7, 0], Row 3: [0, 0, 1].
+
+Q22: How would you undo Translation (80, 150)?
+A: Translate by Point(-80, -150).
+
+Q23: How would you undo Rotation by 35 degrees?
+A: Rotate by -35 degrees (original[i] ^ -35).
+
+Q24: How would you undo Scaling by 1.7?
+A: Multiply by (1.0f / 1.7f).
+
+Q25: Why does scaling by 1.7 happen around the center of the square here?
+A: Because the square's vertices (-50..50) are already centered at (0, 0).
+
+Q26: How do you scale around an arbitrary fixed point (xf, yf)?
+A: Translate(-xf, -yf) -> Scale(1.7) -> Translate(+xf, +yf).
+
+Q27: How do you rotate around an arbitrary pivot (xp, yp)?
+A: Translate(-xp, -yp) -> Rotate(35) -> Translate(+xp, +yp).
+
+Q28: Is Translate(80, 150) followed by Rotate(35) the same as Rotate(35)
+     followed by Translate(80, 150)?
+A: No -- matrix multiplication is non-commutative; order changes the final
+   position of the square.
+
+Q29: How would you modify operator* to support non-uniform scaling (sx != sy)?
+A: Overload Point operator*(Point s) returning Point(x * s.x, y * s.y).
+
+Q30: Why does "1.7 * original[i]" fail to compile?
+A: Member operator* requires a Point on the left side; reversing it requires a
+   non-member friend function operator*(float, Point).
+
+Q31: Which C++ operators cannot be overloaded?
+A: ::, ., .*, ?:, sizeof, and typeid.
+
+Q32: What is the danger of operator precedence with ^?
+A: ^ has lower precedence than + and *, so combined expressions need explicit
+   parentheses around rotations.
+
+Q33: Why is glClearColor(0, 0, 0, 1) (Black) used instead of White?
+A: So the White original square and bright Green transformed square have clear
+   contrast and remain visible.
+
+Q34: What does glClear(GL_COLOR_BUFFER_BIT) do?
+A: Wipes the color buffer and fills the window with black before drawing.
+
+Q35: What is init()?
+A: A user-defined setup function called once after glutCreateWindow() to set
+   the black clear color and centered gluOrtho2D(-400, 400, -300, 300).
+
+Q36: How is (0, 0) centered in the 800 x 600 window?
+A: gluOrtho2D(-400, 400, -300, 300) maps X and Y symmetrically around 0.
+
+Q37: Why does drawSquare() use GL_LINE_LOOP instead of GL_POLYGON?
+A: Wireframe lines let you see both the original white square and the green
+   transformed square simultaneously without one hiding the other.
+
+Q38: Why does drawSquare() use glVertex2f instead of glVertex2i?
+A: Rotation by 35 deg produces fractional coordinates (12.28, 69.64) that
+   glVertex2f preserves accurately without truncation.
+
+Q39: What happens if you enter 0 at the console menu?
+A: Only the gray axes and white original square are drawn (green skipped).
+
+Q40: What happens if you enter -2 at the console menu?
+A: Prints "Invalid Choice!" and exits cleanly via return 0 before GLUT opens.
+
+Q41: Why is GLUT_SINGLE paired with glFlush() here?
+A: The drawing is static after startup, so single buffering is sufficient.
+
+Q42: What does glutInit(&argc, argv) do?
+A: Initializes GLUT and extracts command-line flags; &argc lets GLUT modify
+   the argument count, while argv is already a pointer.
+
+Q43: What does glutMainLoop() do?
+A: Runs GLUT's infinite event loop, triggering display() and keeping the
+   window alive.
+
+Q44: Why does main() take console input BEFORE glutMainLoop()?
+A: Because glutMainLoop() never returns until the program exits.
+
+Q45: What built-in OpenGL functions perform these transforms on the GPU?
+A: glTranslatef(80, 150, 0), glRotatef(35, 0, 0, 1), and glScalef(1.7, 1.7, 1).
+
+Q46: Why does glRotatef rotate around the Z-axis (0, 0, 1) for 2D graphics?
+A: The 2D screen is the XY-plane; spinning around the Z-axis (pointing out of
+   the screen) rotates objects flat within the XY-plane.
+
+Q47: What is Reflection across the Y-axis?
+A: (x, y) -> (-x, y).
+
+Q48: What is Y-Shearing?
+A: (x, y) -> (x, y + shy * x).
+
+Q49: Does "original[i] * 1.7" overwrite original[i]?
+A: No -- it returns a new Point stored in result[i], leaving original[i] intact.
+
+Q50: What is the time and space complexity of transforming an N-vertex polygon?
+A: O(N) time and O(N) space (here N = 4).

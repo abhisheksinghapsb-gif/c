@@ -1,0 +1,611 @@
+================================================================================
+            EXPERIMENT 2: MIDPOINT CIRCLE DRAWING ALGORITHM
+                        File: assignment2.cpp
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+  1. Quick Visual Overview (How the Program Flows)
+  2. 50-Point Complete Theory Breakdown
+  3. Step-by-Step Code Explanation (Start to End + Every Attribute & Parameter)
+  4. 50 Detailed Viva Questions & Answers
+
+
+================================================================================
+SECTION 1: QUICK VISUAL OVERVIEW (EXECUTION FLOW)
+================================================================================
+
+  START (main)
+     |
+     v
+  [1] Print instructions in console (Click 1 = Centre, Click 2 = Radius, R = Reset)
+     |
+     v
+  [2] Initialize GLUT --> Open 800x600 white window
+     |
+     v
+  [3] Set centered 2D graph using gluOrtho2D(-400, 400, -300, 300)
+     |
+     v
+  [4] Register callbacks: display(), mouse(), keyboard() --> Enter glutMainLoop()
+     |
+     +---> User Left-Clicks #1 --> mouse() converts (x, y) to (wx, wy)
+     |                             stores centre (xc, yc), clickCount = 1
+     |
+     +---> User Left-Clicks #2 --> mouse() computes dx = wx - xc, dy = wy - yc
+     |                             radius = round(sqrt(dx*dx + dy*dy))
+     |                             clickCount = 2 --> calls glutPostRedisplay()
+     |                                   |
+     |                                   v
+     |                             display() clears screen to white
+     |                                   --> drawAxes() draws gray X & Y axes
+     |                                   --> midpointCircle(xc, yc, radius)
+     |                                         |
+     |                                         v
+     |                                   Start at x = 0, y = r, p = 1 - r
+     |                                   While (x <= y):
+     |                                     Plot 8 symmetric red pixels around (xc, yc)
+     |                                     x++
+     |                                     If p < 0  --> keep y, p = p + 2*x + 1
+     |                                     If p >= 0 --> y--,    p = p + 2*(x - y) + 1
+     |                                   --> glFlush() pushes image to screen
+     |
+     +---> User Presses 'R' or 'r' --> clickCount = 0 --> clears circle
+
+
+================================================================================
+SECTION 2: 50-POINT COMPLETE THEORY BREAKDOWN
+================================================================================
+
+ 1. Core Purpose: The Midpoint Circle Algorithm is a raster scan-conversion
+    algorithm that picks discrete integer pixels to approximate a circle of
+    radius r centered at (xc, yc).
+
+ 2. Implicit Circle Equation: Centered at the origin (0, 0), a circle is
+    defined by x^2 + y^2 - r^2 = 0.
+
+ 3. Why Naive y = sqrt(r^2 - x^2) Fails: Computing a square root for every
+    pixel is slow, and as x approaches r the curve gets very steep, leaving
+    large vertical gaps between plotted pixels.
+
+ 4. Why Polar Coordinates (r*cos, r*sin) Are Avoided Here: Calling sin() and
+    cos() at every step uses expensive floating-point trigonometry and makes
+    choosing an even step angle difficult.
+
+ 5. Pure Integer Loop: Inside midpointCircle(), ONLY integer addition,
+    subtraction, and multiplication by 2 are used -- zero floats, zero
+    square roots, and zero trigonometry inside the loop.
+
+ 6. Eight-Way Symmetry: A circle is perfectly symmetric across four lines:
+    the X-axis, the Y-axis, y = x, and y = -x. This divides every circle into
+    8 identical 45-degree octants.
+
+ 7. Huge Speed Boost: Because of 8-way symmetry, we only calculate pixels for
+    ONE octant (from 90 deg down to 45 deg) and mirror each calculated point
+    into the other 7 octants automatically.
+
+ 8. The 8 Mirrored Coordinates Around (xc, yc):
+    --> (xc + x, yc + y)   and   (xc - x, yc + y)
+    --> (xc + x, yc - y)   and   (xc - x, yc - y)
+    --> (xc + y, yc + x)   and   (xc - y, yc + x)
+    --> (xc + y, yc - x)   and   (xc - y, yc - x)
+
+ 9. Starting Pixel: The loop always starts at the top of the circle relative
+    to origin: x = 0, y = r.
+
+10. Stopping Condition: The loop runs "while (x <= y)". Once x becomes larger
+    than y, we have crossed the 45-degree diagonal line (y = x), meaning the
+    first octant (and therefore the entire circle) is complete.
+
+11. Driving Axis: Between 90 deg and 45 deg, the slope lies between 0 and -1,
+    so x changes faster than y. Therefore x always increases by 1 every step
+    (x++).
+
+12. Two Candidate Pixels: From current pixel (xk, yk), after stepping right to
+    xk + 1, the next pixel on the circle must be either:
+    --> East pixel:       (xk + 1, yk)      [y stays same]
+    --> South-East pixel: (xk + 1, yk - 1)  [y steps down by 1]
+
+13. Circle Decision Function f(x, y): Defined as f(x, y) = x^2 + y^2 - r^2.
+
+14. Sign Meaning of f(x, y):
+    --> f(x, y) < 0 : Point lies INSIDE the circle.
+    --> f(x, y) = 0 : Point lies ON the circle boundary.
+    --> f(x, y) > 0 : Point lies OUTSIDE the circle.
+
+15. Testing the Midpoint: To choose between East (xk + 1, yk) and South-East
+    (xk + 1, yk - 1), we test the exact midpoint between them:
+    M = (xk + 1, yk - 0.5).
+
+16. Decision Parameter (p): Defined as f(M) = (xk + 1)^2 + (yk - 0.5)^2 - r^2.
+
+17. Exact Initial Value of p0: Plugging x = 0 and y = r into f(M) gives:
+    p0 = 1^2 + (r - 0.5)^2 - r^2 = 1 + r^2 - r + 0.25 - r^2 = 1.25 - r.
+
+18. Integer Initial Value (p = 1 - r): Because r is an integer and every
+    update to p is an integer, rounding 1.25 - r to 1 - r keeps p purely
+    integer without ever changing the result of the (p < 0) sign test.
+
+19. Case 1 (p < 0): Midpoint M lies INSIDE the circle, so the true circle arc
+    passes closer to the upper (East) pixel. We keep y unchanged.
+
+20. Case 1 Update Formula: Because x++ runs first in assignment2.cpp, the new
+    decision parameter is: p = p + 2 * x + 1 (which equals old_p + 2*x_old + 3).
+
+21. Case 2 (p >= 0): Midpoint M lies ON or OUTSIDE the circle, so the true
+    circle arc passes closer to the lower (South-East) pixel. We execute y--.
+
+22. Case 2 Update Formula: Because x++ and y-- both run before updating p in
+    assignment2.cpp, the update formula is: p = p + 2 * (x - y) + 1.
+
+23. Why Order of x++ and y-- Matters: The formulas "2 * x + 1" and
+    "2 * (x - y) + 1" strictly assume x and y have ALREADY been updated to
+    x_(k+1) and y_(k+1).
+
+24. Arbitrary Circle Centre: All math is calculated as if the circle sits at
+    (0, 0), and then xc and yc are simply added inside the 8 glVertex2i()
+    calls to shift the circle to the user's clicked centre.
+
+25. Zero-Radius Edge Case: If the user clicks the exact same spot twice
+    (r = 0), x = 0 and y = 0. The loop runs once (0 <= 0), plots the single
+    centre dot (xc, yc), increments x to 1, and exits cleanly.
+
+26. Total Loop Iterations: Runs roughly r / sqrt(2) (about 0.707 * r) times,
+    plotting 8 pixels per iteration.
+
+27. Time Complexity: O(r), linear with respect to the radius in pixels.
+
+28. Space Complexity: O(1) constant auxiliary space (only scalar ints).
+
+29. Overplotting at Axes and Diagonals: At x = 0 (top, bottom, left, right)
+    and at x = y (the 45-degree corners), some of the 8 symmetric calls plot
+    the exact same pixel twice. This is harmless in GL_POINTS and faster than
+    adding extra if-statements.
+
+30. Zero Floating-Point Drift: Because every calculation inside the loop is
+    exact integer math, all 8 octants meet seamlessly with no gaps.
+
+31. Interactive Two-Click Workflow:
+    --> Click 1: Picks centre (xc, yc).
+    --> Click 2: Picks a point on the edge; Euclidean distance gives radius.
+
+32. Euclidean Distance Formula:
+    --> dx = wx - xc
+    --> dy = wy - yc
+    --> radius = round(sqrt(dx * dx + dy * dy))
+
+33. Why <cmath> Is Included: midpointCircle() does NOT use <cmath> at all!
+    <cmath> is only used inside mouse() for sqrt() and round() to compute the
+    integer radius from the user's two mouse clicks.
+
+34. Live Resizing Behaviour on 3rd+ Clicks: Because mouse() uses "if
+    (clickCount == 0)" and "else" (instead of "else if (clickCount == 1)"),
+    clicking a 3rd or 4th time keeps the same centre and immediately resizes
+    the circle until you press R!
+
+35. Numerical Example Setup: Let centre (xc, yc) = (0, 0) and radius r = 5.
+    --> Initial: x = 0, y = 5, p = 1 - 5 = -4.
+
+36. Numerical Example Trace (First Octant Points):
+    --> Step 0: Plot (0, 5) [+ 7 mirrors]. x++ -> x=1.
+                p = -4 < 0  --> keep y=5, p = -4 + 2(1) + 1 = -1.
+    --> Step 1: Plot (1, 5) [+ 7 mirrors]. x++ -> x=2.
+                p = -1 < 0  --> keep y=5, p = -1 + 2(2) + 1 = 4.
+    --> Step 2: Plot (2, 5) [+ 7 mirrors]. x++ -> x=3.
+                p =  4 >= 0 --> y-- -> y=4, p = 4 + 2(3 - 4) + 1 = 3.
+    --> Step 3: Plot (3, 4) [+ 7 mirrors]. x++ -> x=4.
+                p =  3 >= 0 --> y-- -> y=3, p = 3 + 2(4 - 3) + 1 = 6.
+    --> Stop: Now x = 4 > y = 3, so while (x <= y) ends!
+
+37. Centered 4-Quadrant Coordinate System: gluOrtho2D(-400, 400, -300, 300)
+    maps the 800 x 600 window so (0, 0) sits right in the middle.
+
+38. Why Aspect Ratio Must Match: Window is 800x600 and gluOrtho2D spans
+    800x600 (both 4:3). If they did not match, the circle would look stretched
+    into an oval.
+
+39. Mouse Coordinate Conversion: GLUT reports clicks from top-left (0..800,
+    0..600 downward). wx = x - 400 and wy = 300 - y convert clicks into our
+    centered Cartesian graph.
+
+40. Visual Styling: White background (1, 1, 1, 1), Gray axes (0.5, 0.5, 0.5),
+    Red circle outline (1, 0, 0), and glPointSize(2.0) for bold pixels.
+
+41. Primitive Choice: GL_POINTS plots the individual pixels calculated by
+    midpointCircle(); GL_LINES is used only for the gray X and Y axes.
+
+42. Single Buffering (GLUT_SINGLE): Used with glFlush() because the circle
+    only redraws when the user clicks or presses R (static display).
+
+43. Aliasing on Circles: Because pixels are strictly on or off, slight
+    stair-stepping appears along curved sections.
+
+44. Hollow Outline Only: Basic Midpoint Circle plots only the perimeter. To
+    draw a filled circle, you would draw 4 horizontal GL_LINES connecting
+    each left-right symmetric pair instead of plotting 8 points.
+
+45. Why Ellipses Cannot Use This Directly: Ellipses have rx != ry, so they
+    only have 4-way symmetry (not 8-way) and need a two-region Midpoint
+    Ellipse algorithm.
+
+46. Relationship to Bresenham's Circle Algorithm: Very similar integer logic;
+    Bresenham uses initial d0 = 3 - 2*r (roughly double Midpoint's p0),
+    producing virtually identical pixel circles.
+
+47. Hardware Efficiency: Multiplying by 2 (2*x and 2*(x - y)) can be done as
+    a single bit-shift in hardware, making it fast on tiny microcontrollers.
+
+48. Console Feedback: Every centre click and radius click prints exact
+    numbers to the terminal via cout for easy verification during viva.
+
+49. Reset Control: Pressing 'r' or 'R' sets clickCount = 0 so display()
+    stops drawing the old circle and waits for a new centre click.
+
+50. Real-World Applications: 2D CAD tools, embedded OLED/TFT screen drivers,
+    radar displays, map radius rings, and game minimaps.
+
+
+================================================================================
+SECTION 3: STEP-BY-STEP CODE EXPLANATION (START TO END)
+================================================================================
+
+--------------------------------------------------------------------------------
+STEP 1: HEADER FILES & NAMESPACE (Lines 1 - 6)
+--------------------------------------------------------------------------------
+  #include <iostream>   --> Provides cout and endl for console instructions,
+                            centre readout, and radius readout.
+  #include <GL/glut.h>  --> Loads OpenGL, GLU, and GLUT graphics/window APIs.
+  #include <cmath>      --> Provides sqrt() and round() used in mouse() to
+                            compute the Euclidean distance radius.
+  #include <cstdlib>    --> Standard C utility header.
+  using namespace std;  --> Lets us write cout and endl without std:: prefix.
+
+--------------------------------------------------------------------------------
+STEP 2: GLOBAL VARIABLES (Lines 8 - 9)
+--------------------------------------------------------------------------------
+  int xc, yc, radius;
+    --> Store the circle's Cartesian centre (xc, yc) and integer radius.
+        Global so mouse() can calculate them and display() can draw them.
+
+  int clickCount = 0;
+    --> State tracker:
+        0 -> Waiting for first click (circle centre)
+        1 -> Centre selected, waiting for second click (radius)
+        2 -> Both centre and radius ready; display() draws the circle
+
+--------------------------------------------------------------------------------
+STEP 3: midpointCircle() FUNCTION (Lines 12 - 51)
+--------------------------------------------------------------------------------
+  Function Signature: void midpointCircle(int xc, int yc, int r)
+    --> Parameters:
+        xc, yc : integer Cartesian coordinates of the circle's centre
+        r      : integer radius in coordinate units
+
+  [3.1] Initialize starting point and decision parameter:
+        int x = 0;
+        int y = r;
+        int p = 1 - r;
+          --> Starts at top of circle (0, r) with integer p0 = 1 - r.
+
+  [3.2] Begin plotting individual pixels:
+        glBegin(GL_POINTS);
+          --> Parameter GL_POINTS plots each glVertex2i() as a single pixel.
+
+  [3.3] Loop across the first octant (90 deg to 45 deg):
+        while (x <= y) {
+          --> Plot all 8 symmetric points shifted by (xc, yc):
+              glVertex2i(xc + x, yc + y);   // Octant 1 (+x, +y)
+              glVertex2i(xc - x, yc + y);   // Octant 2 (-x, +y)
+              glVertex2i(xc + x, yc - y);   // Octant 8 (+x, -y)
+              glVertex2i(xc - x, yc - y);   // Octant 7 (-x, -y)
+              glVertex2i(xc + y, yc + x);   // Octant 4 (+y, +x)
+              glVertex2i(xc - y, yc + x);   // Octant 3 (-y, +x)
+              glVertex2i(xc + y, yc - x);   // Octant 5 (+y, -x)
+              glVertex2i(xc - y, yc - x);   // Octant 6 (-y, -x)
+              --> glVertex2i takes 2 integer parameters (2 = 2D, i = GLint).
+
+          --> Advance x by 1 pixel:
+              x++;
+
+          --> Check midpoint sign and update y & p:
+              if (p < 0) {
+                  p = p + 2 * x + 1;        // Midpoint inside -> keep y
+              } else {
+                  y--;                      // Midpoint outside -> step y down
+                  p = p + 2 * (x - y) + 1;
+              }
+        }
+        glEnd();
+
+--------------------------------------------------------------------------------
+STEP 4: drawAxes() FUNCTION (Lines 54 - 69)
+--------------------------------------------------------------------------------
+  glColor3f(0.5, 0.5, 0.5); --> Medium gray (3 float RGB values, 0.0 to 1.0).
+  glBegin(GL_LINES);        --> Pairs every 2 vertices into a straight line.
+      glVertex2i(-400, 0); glVertex2i(400, 0);   --> X-axis
+      glVertex2i(0, -300); glVertex2i(0, 300);   --> Y-axis
+  glEnd();
+
+--------------------------------------------------------------------------------
+STEP 5: display() CALLBACK FUNCTION (Lines 72 - 86)
+--------------------------------------------------------------------------------
+  glClear(GL_COLOR_BUFFER_BIT);
+    --> Wipes the GPU color buffer to opaque White (set by glClearColor).
+
+  drawAxes();
+    --> Redraws the gray X and Y axes.
+
+  if (clickCount == 2) {
+      glColor3f(1.0, 0.0, 0.0);    --> Pure Red (R=1, G=0, B=0).
+      midpointCircle(xc, yc, radius);
+  }
+
+  glFlush();
+    --> Forces queued OpenGL commands onto the single-buffered screen now.
+
+--------------------------------------------------------------------------------
+STEP 6: mouse() CALLBACK FUNCTION (Lines 89 - 125)
+--------------------------------------------------------------------------------
+  Function Signature: void mouse(int button, int state, int x, int y)
+    --> Parameters passed automatically by GLUT:
+        button : Mouse button pressed (checked for GLUT_LEFT_BUTTON)
+        state  : Press or release (checked for GLUT_DOWN)
+        x, y   : Screen pixel coordinates from top-left corner
+
+  [6.1] Convert top-left screen coordinates to centered Cartesian graph:
+        int wx = x - 400;
+        int wy = 300 - y;
+
+  [6.2] First click (clickCount == 0):
+        xc = wx; yc = wy;
+        clickCount = 1;
+        Prints "Centre selected: xc, yc" in console.
+
+  [6.3] Second (or any further) click (else):
+        int dx = wx - xc;
+        int dy = wy - yc;
+        radius = round(sqrt(dx * dx + dy * dy));
+        clickCount = 2;
+        Prints "Radius: radius" in console.
+
+  [6.4] glutPostRedisplay();
+        --> Schedules GLUT to run display() to show the newly sized circle.
+
+--------------------------------------------------------------------------------
+STEP 7: keyboard() CALLBACK FUNCTION (Lines 128 - 137)
+--------------------------------------------------------------------------------
+  void keyboard(unsigned char key, int x, int y)
+    --> key: ASCII character pressed; x, y: cursor coordinates.
+    --> If key is 'r' or 'R': sets clickCount = 0 and prints reset message.
+    --> Calls glutPostRedisplay() so display() erases the old circle.
+
+--------------------------------------------------------------------------------
+STEP 8: main() FUNCTION - RUNTIME ENTRY POINT (Lines 140 - 175)
+--------------------------------------------------------------------------------
+  [8.1] Prints title and 3-step instructions to console.
+  [8.2] glutInit(&argc, argv); --> Starts GLUT with command-line arguments.
+  [8.3] glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB); --> Single buffer + RGB.
+  [8.4] glutInitWindowSize(800, 600); & glutInitWindowPosition(100, 100);
+  [8.5] glutCreateWindow("Midpoint Circle Drawing Algorithm");
+  [8.6] glClearColor(1.0, 1.0, 1.0, 1.0); --> Sets white eraser color.
+  [8.7] gluOrtho2D(-400, 400, -300, 300); --> Puts origin (0, 0) at centre.
+  [8.8] glPointSize(2.0); --> Makes circle pixels 2x2 screen pixels wide.
+  [8.9] Registers display, mouse, and keyboard callbacks.
+  [8.10] glutMainLoop(); --> Enters GLUT's infinite event loop.
+
+
+================================================================================
+SECTION 4: 50 DETAILED VIVA QUESTIONS & ANSWERS
+================================================================================
+
+Q1: What is the Midpoint Circle Drawing Algorithm?
+A: An integer-based rasterization algorithm that computes pixel coordinates
+   for one 45-degree octant of a circle using a midpoint decision parameter
+   and mirrors those pixels across all 8 octants to form the full circle.
+
+Q2: Why don't we draw a circle using y = sqrt(r^2 - x^2)?
+A: Square roots are slow floating-point operations, and near x = r the circle
+   becomes very steep, leaving big vertical gaps between consecutive pixels.
+
+Q3: Why don't we use polar coordinates (x = r*cos(t), y = r*sin(t)) here?
+A: Calculating sin() and cos() for every pixel is computationally heavy, and
+   picking the exact angle step size without gaps or overplotting is tricky.
+
+Q4: Explain 8-way symmetry of a circle.
+A: A circle is symmetric across X-axis, Y-axis, y = x, and y = -x. Knowing one
+   point (x, y) immediately gives 7 other valid points: (+-x, +-y) and
+   (+-y, +-x), cutting computation by 8x.
+
+Q5: Which octant does assignment2.cpp actually compute?
+A: The upper half of the first quadrant, starting at (0, r) [90 deg] and
+   stopping at x = y [45 deg].
+
+Q6: Why is the loop condition "while (x <= y)"?
+A: Starting from x = 0 and y = r, x grows while y shrinks until they meet at
+   the 45-degree line (x == y). Once x > y, the entire first octant is done.
+
+Q7: What is the implicit circle function f(x, y)?
+A: f(x, y) = x^2 + y^2 - r^2. It is < 0 inside the circle, == 0 on the circle,
+   and > 0 outside the circle.
+
+Q8: What are the two candidate pixels at each step in the first octant?
+A: After stepping right to xk + 1, the circle must pick either the East pixel
+   (xk + 1, yk) or the South-East pixel (xk + 1, yk - 1).
+
+Q9: What midpoint is tested to decide between East and South-East?
+A: M = (xk + 1, yk - 0.5), which sits halfway vertically between the two
+   candidate pixels.
+
+Q10: What is the exact initial decision parameter p0, and why do we write
+     "int p = 1 - r;"?
+A: Exact p0 = f(1, r - 0.5) = 1.25 - r. Because r is an integer and all future
+   updates to p are integers, rounding 1.25 - r to 1 - r keeps p purely
+   integer without ever changing the result of testing (p < 0).
+
+Q11: What does (p < 0) mean geometrically?
+A: The midpoint lies INSIDE the circle, so the true circle boundary is closer
+   to the upper (East) pixel. Therefore y stays unchanged.
+
+Q12: What does (p >= 0) mean geometrically?
+A: The midpoint lies ON or OUTSIDE the circle, so the true circle boundary is
+   closer to the lower (South-East) pixel. Therefore y decrements (y--).
+
+Q13: Why does assignment2.cpp use "p = p + 2 * x + 1" instead of "p + 2*x + 3"?
+A: Because "x++" executes BEFORE the "if (p < 0)" check! Since x is already
+   x_new = x_old + 1, 2 * x_new + 1 equals 2 * (x_old + 1) + 1 = 2 * x_old + 3.
+   Both are mathematically identical.
+
+Q14: Why does the else block use "p = p + 2 * (x - y) + 1"?
+A: Because both "x++" and "y--" have already run! Using updated x_new and
+   y_new gives p_old + 2*x_new - 2*y_new + 1 = p_old + 2*(x - y) + 1.
+
+Q15: What would happen if you moved "x++" to the END of the while loop without
+     changing the p formulas?
+A: The decision parameter would be off by 2 on every step, distorting the
+   circle shape.
+
+Q16: How does the algorithm draw a circle whose centre is NOT at (0, 0)?
+A: It computes (x, y) around (0, 0) and simply adds xc and yc inside all 8
+   glVertex2i() calls (e.g., xc + x, yc + y).
+
+Q17: How is the circle radius calculated from the user's two mouse clicks?
+A: Using Euclidean distance: dx = wx - xc, dy = wy - yc, and
+   radius = round(sqrt(dx * dx + dy * dy)).
+
+Q18: Why is <cmath> included if Midpoint Circle is a purely integer algorithm?
+A: <cmath> is NOT used inside midpointCircle(). It is only needed inside
+   mouse() to call sqrt() and round() when finding the radius from two clicks.
+
+Q19: What happens if you click a 3rd time without pressing 'R'?
+A: Because mouse() has "if (clickCount == 0)" and "else", any 3rd, 4th, or
+   5th click keeps the same centre (xc, yc) and recalculates a new radius,
+   resizing the circle live on screen!
+
+Q20: What happens if you click the exact same spot twice (radius = 0)?
+A: x = 0, y = 0. while (0 <= 0) runs once, plotting the single centre dot
+   (xc, yc), then x becomes 1 and the loop exits cleanly.
+
+Q21: What is the time complexity of midpointCircle()?
+A: O(r), because the loop runs about 0.707 * r times and does O(1) work per
+   iteration.
+
+Q22: What is the space complexity of midpointCircle()?
+A: O(1) constant space, storing only a handful of integer variables.
+
+Q23: Why are some pixels plotted twice at x = 0 and x = y?
+A: At x = 0, (xc + 0, yc + y) and (xc - 0, yc + y) are the exact same pixel.
+   At x = y, (xc + x, yc + y) and (xc + y, yc + x) are identical. Overplotting
+   is harmless in GL_POINTS and faster than adding if-checks.
+
+Q24: Can this exact code draw an ellipse?
+A: No. An ellipse has rx != ry, so it only has 4-way symmetry (not 8-way) and
+   needs a separate two-region Midpoint Ellipse Algorithm.
+
+Q25: How does Midpoint Circle compare to Bresenham's Circle Algorithm?
+A: Both use integer math and 8-way symmetry. Midpoint starts at p0 = 1 - r
+   while Bresenham starts at d0 = 3 - 2*r; both produce nearly identical
+   rasterized circles.
+
+Q26: Why did you use glVertex2i instead of glVertex2f?
+A: Because xc, yc, x, and y are all exact integers. glVertex2i ("2" = 2D,
+   "i" = int) matches them directly without type conversion.
+
+Q27: Why is GL_POINTS used in midpointCircle() instead of GL_LINE_LOOP?
+A: Because the 8 symmetric calls jump back and forth across all 8 octants on
+   every loop iteration. Using GL_LINE_LOOP would draw chaotic crisscrossing
+   lines all across the circle!
+
+Q28: How could you convert midpointCircle() into a FILLED circle?
+A: Replace GL_POINTS with GL_LINES and draw 4 horizontal spans per iteration:
+   (xc-x, yc+y)-(xc+x, yc+y), (xc-x, yc-y)-(xc+x, yc-y),
+   (xc-y, yc+x)-(xc+y, yc+x), and (xc-y, yc-x)-(xc+y, yc-x).
+
+Q29: How is the origin (0, 0) placed at the centre of the 800 x 600 window?
+A: By calling gluOrtho2D(-400, 400, -300, 300), which maps the left edge to
+   -400, right to +400, bottom to -300, and top to +300 symmetrically.
+
+Q30: Why do we convert mouse clicks with wx = x - 400 and wy = 300 - y?
+A: GLUT's mouse starts (0, 0) at the top-left with Y increasing downward.
+   Subtracting 400 shifts X to the centre, and (300 - y) shifts Y to the
+   centre and flips it upward to match gluOrtho2D.
+
+Q31: What happens if gluOrtho2D has a different width/height ratio than the
+     800 x 600 window?
+A: The circle will appear stretched or squashed into an oval because 1 unit in
+   X will not equal 1 unit in Y on screen.
+
+Q32: What does glClearColor(1.0, 1.0, 1.0, 1.0) do?
+A: Sets opaque White (R=1, G=1, B=1, A=1) as the background clearing color.
+
+Q33: What does glClear(GL_COLOR_BUFFER_BIT) do in display()?
+A: Clears the GPU's color buffer and fills the entire window with white before
+   drawing the axes and circle.
+
+Q34: Why is drawAxes() called inside display() every time?
+A: Because glClear(GL_COLOR_BUFFER_BIT) wipes the entire window clean on every
+   redraw, so the gray axes must be redrawn each time.
+
+Q35: What does glColor3f(1.0, 0.0, 0.0) do?
+A: Sets the drawing color to pure Red using 3 floats (R=1, G=0, B=0).
+
+Q36: What does glPointSize(2.0) do?
+A: Renders each plotted GL_POINTS pixel as a 2x2 square so the red circle
+   outline is clearly visible.
+
+Q37: Why is GLUT_SINGLE used instead of GLUT_DOUBLE?
+A: Because the circle is static and only redraws on mouse clicks or pressing R
+   (no continuous animation), so a single frame buffer with glFlush() is ideal.
+
+Q38: What does glFlush() do at the end of display()?
+A: Forces all queued OpenGL drawing commands to execute immediately and appear
+   on the single-buffered screen.
+
+Q39: What does glutPostRedisplay() do?
+A: Flags the window for redrawing so GLUT automatically invokes display() on
+   the next event-loop cycle.
+
+Q40: What happens when you press 'r' or 'R'?
+A: keyboard() sets clickCount = 0, prints "Reset. Select a new centre.", and
+   calls glutPostRedisplay() so display() erases the circle.
+
+Q41: Why do we check BOTH key == 'r' and key == 'R'?
+A: Because lowercase 'r' (ASCII 114) and uppercase 'R' (ASCII 82) have
+   different codes; checking both ensures reset works even with Caps Lock on.
+
+Q42: Why does mouse() check "button == GLUT_LEFT_BUTTON && state == GLUT_DOWN"?
+A: To react only to left-button presses and ignore button releases (GLUT_UP)
+   or right/middle clicks.
+
+Q43: What is the role of glutInit(&argc, argv)?
+A: Initializes GLUT and reads any command-line GLUT options. &argc passes the
+   address of argc so GLUT can update it if flags are removed; argv is already
+   a pointer.
+
+Q44: What is the role of glutMainLoop()?
+A: Enters GLUT's infinite event-processing loop to keep the window open and
+   route redraw, mouse, and keyboard events to our callbacks.
+
+Q45: Does Midpoint Circle suffer from aliasing?
+A: Yes, pixels are strictly red or white, producing slight stair-stepping on
+   curved edges.
+
+Q46: Can Midpoint Circle use bit-shifting in hardware?
+A: Yes -- 2 * x can be written as (x << 1) and 2 * (x - y) as ((x - y) << 1)
+   for single-cycle multiplication in hardware.
+
+Q47: Why does display() check "if (clickCount == 2)"?
+A: After only 1 click (clickCount == 1), only the centre is known and radius
+   has not been chosen yet. Checking == 2 ensures we only draw a valid circle.
+
+Q48: What happens if you press 'r' after only 1 click?
+A: clickCount resets from 1 back to 0 so you can pick a fresh centre without
+   having to finish the old circle first.
+
+Q49: What does "round()" do when calculating radius in mouse()?
+A: sqrt() returns a floating-point number (double). round() rounds it to the
+   nearest integer instead of chopping off decimals (e.g., 49.8 becomes 50).
+
+Q50: Trace the first 2 iterations of midpointCircle(0, 0, 10) [1st octant].
+A: Initial: x = 0, y = 10, p = 1 - 10 = -9.
+   --> Iter 1: Plot (0, 10). x++ -> x=1. p = -9 < 0 --> y=10, p = -9 + 2(1)+1 = -6.
+   --> Iter 2: Plot (1, 10). x++ -> x=2. p = -6 < 0 --> y=10, p = -6 + 2(2)+1 = -1.

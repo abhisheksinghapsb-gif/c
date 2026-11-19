@@ -1,0 +1,426 @@
+================================================================================
+              EXPERIMENT 6b: KOCH CURVE & KOCH SNOWFLAKE
+                        File: assignment6b.cpp
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+  1. Quick Visual Overview (How 1 Line Becomes 4 Lines & Forms a Snowflake)
+  2. 50-Point Complete Theory Breakdown
+  3. Step-by-Step Code Explanation (Start to End + Every Attribute & Parameter)
+  4. 50 Detailed Viva Questions & Answers
+
+
+================================================================================
+SECTION 1: QUICK VISUAL OVERVIEW (EXECUTION & SUBDIVISION FLOW)
+================================================================================
+
+  CORE SUBDIVISION RULE (1 line --> 4 smaller lines of length L/3):
+
+    Level 0:   P1 ----------------------- P2
+
+                               P5  (rotated +60 deg CCW from P3->P4)
+                              /  \
+    Level 1:   P1 -------- P3      P4 -------- P2
+
+  PROGRAM FLOW (main -> display -> koch):
+     |
+     v
+  [1] Open 800x600 window --> init() sets BLACK bg + centered (-400..400,-300..300)
+     |
+     v
+  [2] display() clears screen to BLACK, sets GREEN (0,1,0) & width 2,
+      opens ONE glBegin(GL_LINES) block, and calls koch() on 3 CLOCKWISE sides:
+        Side 1: (-180, -100) --> (0, 212)
+        Side 2: (0, 212)     --> (180, -100)
+        Side 3: (180, -100)  --> (-180, -100)
+           |
+           v
+      Inside koch(x1, y1, x2, y2, n):
+        If n == 0 --> emit glVertex2f(x1,y1) & glVertex2f(x2,y2); return;
+        Else      --> find P3 (1/3), P4 (2/3), peak P5 (+60 deg)
+                      recursively call koch() on:
+                        P1->P3, P3->P5, P5->P4, P4->P2  with (n - 1)
+     |
+     v
+  [3] glEnd() + glFlush() --> Keyboard '+' (max 6), '-' (min 0), 'R' (reset 3)
+
+
+================================================================================
+SECTION 2: 50-POINT COMPLETE THEORY BREAKDOWN
+================================================================================
+
+ 1. What Is the Koch Curve?: A classic self-similar mathematical fractal built
+    by recursively replacing the middle third of every straight line with two
+    sides of an equilateral triangle.
+
+ 2. Inventor & Year: Swedish mathematician Helge von Koch (1904).
+
+ 3. What Is the Koch Snowflake?: A closed fractal formed by applying the Koch
+    Curve to all 3 sides of an equilateral triangle (as in assignment6b.cpp).
+
+ 4. Self-Similarity: Every 1/3rd piece of an infinite Koch Curve is an exact
+    scaled-down replica of the entire curve.
+
+ 5. Core Rule (1 -> 4): Each segment of length L splits into 4 segments of
+    length L/3.
+
+ 6. One-Third Vector (dx, dy): dx = (x2 - x1) / 3.0; dy = (y2 - y1) / 3.0.
+
+ 7. First Cut Point P3 (1/3): x3 = x1 + dx, y3 = y1 + dy.
+
+ 8. Second Cut Point P4 (2/3): x4 = x1 + 2 * dx, y4 = y1 + 2 * dy.
+
+ 9. Peak Point P5 Geometry: Forms an equilateral triangle with P3 and P4, so
+    all sides equal L/3 and all interior angles equal 60 degrees.
+
+10. 60 Degrees in Radians: M_PI / 3 (since pi rad = 180 deg).
+
+11. Rotation Formula for Peak P5 (+60 deg CCW around P3):
+    --> x5 = x3 + dx * cos(M_PI / 3) - dy * sin(M_PI / 3)
+    --> y5 = y3 + dx * sin(M_PI / 3) + dy * cos(M_PI / 3)
+
+12. Exact Trig Values: cos(60 deg) = 0.5; sin(60 deg) = sqrt(3)/2 = 0.866025.
+
+13. Four Recursive Calls (n - 1):
+    P1 -> P3,  P3 -> P5,  P5 -> P4,  P4 -> P2.
+
+14. Base Case (if (n == 0)): Stops splitting, emits glVertex2f(x1, y1) and
+    glVertex2f(x2, y2) into the active GL_LINES block, and returns.
+
+15. Why Only n == 0 Draws Anything: Higher levels (n > 0) only divide lines;
+    if they drew too, the deleted middle third (P3->P4) would remain visible!
+
+16. Starting Equilateral Triangle Vertices:
+    (-180, -100), (0, 212), and (180, -100).
+
+17. Why Top Vertex Y Is 212: Base length s = 360. Equilateral triangle height
+    h = 360 * sqrt(3)/2 = 311.77 (~312). Starting at y = -100 gives -100 +
+    312 = 212.
+
+18. Why Triangle Edges Are Traced CLOCKWISE:
+    (-180,-100)->(0,212)->(180,-100)->(-180,-100).
+    Because +60 deg CCW always points to the LEFT of the line direction,
+    walking clockwise makes "left" face OUTWARD so snowflake spikes pop out!
+
+19. Reversing Order (Counter-Clockwise): Makes all peaks point INWARD into the
+    triangle, creating an inverted "anti-snowflake".
+
+20. Segment Count (Single Side): 4^level segments.
+
+21. Segment Count (Full 3-Sided Snowflake): 3 * 4^level segments.
+
+22. Segment Counts Across Levels 0 to 6:
+    --> level 0: 3 lines (equilateral triangle)
+    --> level 1: 12 lines (6-pointed star)
+    --> level 2: 48 lines
+    --> level 3 (initial): 192 lines
+    --> level 4: 768 lines
+    --> level 5: 3,072 lines
+    --> level 6 (max): 12,288 lines
+
+23. Perimeter Growth Rule: Every level multiplies total perimeter by 4/3
+    (33.3% longer each step): P_n = P_0 * (4/3)^n.
+
+24. Infinite Perimeter Paradox: As n -> infinity, perimeter grows to INFINITY.
+
+25. Finite Area Paradox: Enclosed area stays FINITE, converging to exactly
+    8/5 (1.6x) the area of the original triangle.
+
+26. Fractal (Hausdorff) Dimension: D = log(4) / log(3) = 1.2619 (more complex
+    than a 1D line, less than a 2D area).
+
+27. Continuous Everywhere, Differentiable Nowhere: At infinite depth, the
+    curve has no breaks yet has sharp corners at every single point.
+
+28. Numerical Example (1 Horizontal Line (0,0) -> (90,0), n = 1):
+    --> dx = 30, dy = 0  |  P3 = (30, 0), P4 = (60, 0)
+    --> x5 = 30 + 30*(0.5) = 45,  y5 = 0 + 30*(0.866) = 25.98
+    --> 4 lines: (0,0)->(30,0)->(45,25.98)->(60,0)->(90,0).
+
+29. Time Complexity: O(4^level) (quadruples every +1 level).
+
+30. Space Complexity: O(level) call-stack frames (max 7 frames at level 6).
+
+31. Why Max Level Is Capped at 6: At level 6 there are 12,288 segments, each
+    only 360 / 3^6 = 0.49 pixels long (smaller than 1 monitor pixel). Higher
+    levels waste CPU with zero extra visible sharpness.
+
+32. Why Min Level Is 0: Level 0 still draws the clean 3-sided base triangle
+    (unlike assignment6.cpp where depth 0 drew a blank screen).
+
+33. Single Batched glBegin(GL_LINES) Block: Placed once in display() around
+    all 3 koch() calls so thousands of segments render in one efficient pass.
+
+34. How GL_LINES Works Here: Every two consecutive glVertex2f() calls emitted
+    at n == 0 pair up to form one straight line segment.
+
+35. Initial Level: Global int level = 3 draws a crisp 192-segment snowflake
+    immediately on startup.
+
+36. Keyboard Controls:
+    --> '+' : level++ (if level < 6)
+    --> '-' : level-- (if level > 0)
+    --> 'r' or 'R' : resets level = 3
+
+37. Visual Styling: Black background (0,0,0,1), bright Green snowflake (0,1,0),
+    and glLineWidth(2).
+
+38. Coordinate System: gluOrtho2D(-400, 400, -300, 300) centers the origin at
+    the middle of the 800 x 600 window.
+
+39. Float Precision: Dividing by 3.0 and multiplying by sin(M_PI / 3) creates
+    decimals; float + glVertex2f() preserve exact symmetry.
+
+40. Explicit Floating Division (3.0): Ensures floating-point division.
+
+41. M_PI Constant: Provided by <cmath> (GNU/POSIX/MinGW) for pi.
+
+42. User-Defined init() Function: Sets black background and centered
+    gluOrtho2D once after glutCreateWindow().
+
+43. Single Buffering (GLUT_SINGLE): Paired with glFlush() since the snowflake
+    only redraws on keyboard presses.
+
+44. Zero Array Storage Needed: Vertices are computed and sent on the fly.
+
+45. Missing "return;" Danger: Omitting return inside if(n == 0) would recurse
+    into n = -1, -2, ... and cause a Stack Overflow crash.
+
+46. Global level Variable: Shared so keyboard() updates it and display() reads
+    it without passing parameters to display().
+
+47. Screen Redrawing: glutPostRedisplay() triggers display() after every key
+    press, erasing the old level via glClear(GL_COLOR_BUFFER_BIT).
+
+48. Difference vs. assignment6.cpp: Exp 6 uses curved Bezier trees (2^d - 1,
+    min 1, max 9); Exp 6b uses straight Koch edges (3 * 4^level, min 0, max 6).
+
+49. Advantages: Tiny, clean ~20-line recursive core demonstrating rotation,
+    self-similarity, and divide-and-conquer geometry.
+
+50. Real-World Applications: Compact fractal antennas in smartphones (packing
+    huge perimeter into tiny area), coastline modeling, and crystal patterns.
+
+
+================================================================================
+SECTION 3: STEP-BY-STEP CODE EXPLANATION (START TO END)
+================================================================================
+
+--------------------------------------------------------------------------------
+STEP 1: HEADERS & GLOBAL level (Lines 1 - 6)
+--------------------------------------------------------------------------------
+  #include <GL/glut.h>, <iostream>, <cmath>; using namespace std;
+  int level = 3; --> Global recursion level (starts at 3).
+
+--------------------------------------------------------------------------------
+STEP 2: koch() RECURSIVE FUNCTION (Lines 9 - 42)
+--------------------------------------------------------------------------------
+  Parameters: x1, y1 (start), x2, y2 (end), n (remaining recursion levels).
+  [2.1] Base case: if (n == 0) { glVertex2f(x1,y1); glVertex2f(x2,y2); return; }
+  [2.2] Compute 1/3 vector: dx = (x2 - x1) / 3.0; dy = (y2 - y1) / 3.0;
+  [2.3] Compute cut points:
+        x3 = x1 + dx;     y3 = y1 + dy;      // 1/3 point
+        x4 = x1 + 2 * dx; y4 = y1 + 2 * dy;  // 2/3 point
+  [2.4] Compute +60 deg rotated peak:
+        x5 = x3 + dx * cos(M_PI / 3) - dy * sin(M_PI / 3);
+        y5 = y3 + dx * sin(M_PI / 3) + dy * cos(M_PI / 3);
+  [2.5] Four recursive calls with n - 1:
+        koch(x1,y1,x3,y3,n-1); koch(x3,y3,x5,y5,n-1);
+        koch(x5,y5,x4,y4,n-1); koch(x4,y4,x2,y2,n-1);
+
+--------------------------------------------------------------------------------
+STEP 3: display(), keyboard(), init() & main() (Lines 45 - 114)
+--------------------------------------------------------------------------------
+  display():
+    --> glClear(GL_COLOR_BUFFER_BIT); glColor3f(0,1,0); glLineWidth(2);
+    --> glBegin(GL_LINES);
+          koch(-180, -100, 0, 212, level);
+          koch(0, 212, 180, -100, level);
+          koch(180, -100, -180, -100, level);
+        glEnd();
+    --> glFlush();
+  keyboard(unsigned char key, int x, int y):
+    --> '+' && level < 6 -> level++
+    --> '-' && level > 0 -> level--
+    --> 'r' || 'R'       -> level = 3
+    --> glutPostRedisplay();
+  init(): glClearColor(0, 0, 0, 1); gluOrtho2D(-400, 400, -300, 300);
+  main(): Prints controls, opens 800x600 window (GLUT_SINGLE | GLUT_RGB),
+          calls init(), registers display & keyboard, enters glutMainLoop().
+
+
+================================================================================
+SECTION 4: 50 DETAILED VIVA QUESTIONS & ANSWERS
+================================================================================
+
+Q1: What is a Koch Curve?
+A: A fractal formed by splitting a straight line into 3 equal parts, replacing
+   the middle third with two sides of an equilateral triangle (4 segments),
+   and repeating recursively.
+
+Q2: What is the difference between a Koch Curve and a Koch Snowflake?
+A: A Koch Curve starts from 1 line segment; a Koch Snowflake applies the Koch
+   Curve to all 3 sides of an equilateral triangle.
+
+Q3: Who invented the Koch Curve and when?
+A: Helge von Koch in 1904.
+
+Q4: What do dx and dy represent in koch()?
+A: One-third of the horizontal and vertical span: (x2-x1)/3.0 and (y2-y1)/3.0.
+
+Q5: How are P3 and P4 computed?
+A: P3 = (x1 + dx, y1 + dy) [1/3]; P4 = (x1 + 2*dx, y1 + 2*dy) [2/3].
+
+Q6: How is peak P5 (x5, y5) computed?
+A: Rotating (dx, dy) counter-clockwise by 60 deg (M_PI / 3) around P3:
+   x5 = x3 + dx*cos(M_PI/3) - dy*sin(M_PI/3);
+   y5 = y3 + dx*sin(M_PI/3) + dy*cos(M_PI/3).
+
+Q7: Why use M_PI / 3 instead of 60?
+A: C++ sin() and cos() take radians, and 60 degrees = pi / 3 radians.
+
+Q8: What are cos(M_PI / 3) and sin(M_PI / 3)?
+A: 0.5 and sqrt(3)/2 (approx 0.866025).
+
+Q9: Why specifically 60 degrees?
+A: All interior angles of an equilateral triangle are 60 deg, making all 4
+   sub-segments equal in length (L / 3).
+
+Q10: List the 4 recursive calls in koch().
+A: (x1,y1)->(x3,y3), (x3,y3)->(x5,y5), (x5,y5)->(x4,y4), (x4,y4)->(x2,y2), all
+   passing (n - 1).
+
+Q11: What is the base case of koch()?
+A: "if (n == 0)" -- emits the two endpoints via glVertex2f() and returns.
+
+Q12: Why doesn't koch() draw lines when n > 0?
+A: Higher levels are being replaced by subdivided peaks; drawing them would
+   leave the old straight middle third visible across every peak.
+
+Q13: What happens if "return;" is removed from if(n == 0)?
+A: Infinite recursion (n = -1, -2, ...) causing a Stack Overflow crash.
+
+Q14: What are the 3 starting triangle vertices in display()?
+A: (-180, -100), (0, 212), and (180, -100).
+
+Q15: Why is the top vertex Y equal to 212?
+A: Base s = 360 -> equilateral height = 360 * sqrt(3)/2 = 312 -> -100 + 312 = 212.
+
+Q16: Why are the 3 triangle edges passed CLOCKWISE in display()?
+A: Because +60 deg CCW turns to the LEFT of travel direction; walking clockwise
+   makes "left" face OUTWARD so snowflake spikes point outward.
+
+Q17: What happens if the triangle vertices are passed counter-clockwise?
+A: All spikes point INWARD, creating an inverted anti-snowflake.
+
+Q18: How many segments does a single Koch Curve have at level n?
+A: 4^n segments.
+
+Q19: How many segments does the full Koch Snowflake have at level n?
+A: 3 * 4^n segments.
+
+Q20: What is drawn when level = 0?
+A: A plain green equilateral triangle (3 lines).
+
+Q21: What is drawn when level = 1?
+A: A 6-pointed star (12 lines).
+
+Q22: How many segments are drawn at initial level = 3?
+A: 3 * 4^3 = 192 segments.
+
+Q23: How many segments are drawn at max level = 6?
+A: 3 * 4^6 = 12,288 segments.
+
+Q24: Why cap level at 6 ("level < 6")?
+A: Segment count quadruples every level (O(4^n)), and at level 6 each segment
+   is already 0.49 px (sub-pixel), so higher levels waste CPU with no visual gain.
+
+Q25: Why is minimum level 0 here while Exp 6 had minimum depth 1?
+A: Level 0 still draws the 3-line base triangle; depth 0 in Exp 6 drew nothing.
+
+Q26: How does perimeter grow per level?
+A: Multiplies by 4/3 every level: P_n = P_0 * (4/3)^n.
+
+Q27: What happens to perimeter and area as level -> infinity?
+A: Perimeter becomes INFINITE while area stays FINITE (8/5 of original triangle).
+
+Q28: What is the fractal (Hausdorff) dimension of the Koch Curve?
+A: D = log(4) / log(3) = 1.2619.
+
+Q29: What is the time complexity of koch()?
+A: O(4^level).
+
+Q30: What is the space complexity (call-stack depth)?
+A: O(level), max 7 stack frames at level 6.
+
+Q31: Why is glBegin(GL_LINES) placed ONCE in display() instead of inside koch()?
+A: Batches all thousands of line segments into a single OpenGL primitive block
+   for faster rendering.
+
+Q32: Why use GL_LINES instead of GL_LINE_LOOP?
+A: The base case emits explicit endpoint pairs (x1,y1) and (x2,y2), which
+   GL_LINES pairs cleanly into independent segments.
+
+Q33: Why use float and glVertex2f() instead of int and glVertex2i()?
+A: Division by 3.0 and sin(M_PI/3) produce decimals that must be preserved for
+   exact geometric symmetry.
+
+Q34: Why write "/ 3.0" instead of "/ 3"?
+A: Explicitly guarantees floating-point division.
+
+Q35: What do keys '+', '-', and 'r'/'R' do?
+A: '+' increments level (max 6), '-' decrements level (min 0), 'r'/'R' resets
+   level to 3, then calls glutPostRedisplay().
+
+Q36: What color is the background and what color is the snowflake?
+A: Black background (glClearColor(0,0,0,1)) and bright Green snowflake
+   (glColor3f(0,1,0)).
+
+Q37: What does glClear(GL_COLOR_BUFFER_BIT) do?
+A: Clears the color buffer to black before redrawing the new recursion level.
+
+Q38: What does glLineWidth(2) do?
+A: Sets line thickness to 2 pixels.
+
+Q39: What is init()?
+A: User-defined one-time setup function configuring the black clear color and
+   centered gluOrtho2D(-400, 400, -300, 300).
+
+Q40: How is (0, 0) centered in the 800 x 600 window?
+A: Via gluOrtho2D(-400, 400, -300, 300).
+
+Q41: Why use GLUT_SINGLE and glFlush()?
+A: The snowflake is static until a key is pressed (no continuous animation).
+
+Q42: What does glutPostRedisplay() do?
+A: Marks the window dirty so GLUT invokes display() on the next loop cycle.
+
+Q43: What does glutInit(&argc, argv) do?
+A: Initializes GLUT and extracts command-line flags; &argc lets GLUT modify
+   the argument count, while argv is already a pointer.
+
+Q44: What does glutMainLoop() do?
+A: Starts GLUT's infinite event loop for rendering and keyboard handling.
+
+Q45: Which header provides M_PI?
+A: <cmath>.
+
+Q46: What does "self-similarity" mean?
+A: Zooming into any smaller section reveals an identical copy of the whole shape.
+
+Q47: Name a real-world engineering use of the Koch Curve.
+A: Compact multiband fractal antennas in mobile phones (huge wire length
+   packed into a tiny finite area).
+
+Q48: What happens if you flip ONLY the bottom edge call to
+     koch(-180, -100, 180, -100, level)?
+A: The left and right sides still spike outward while the bottom side spikes
+   INWARD (upward into the triangle).
+
+Q49: What is the segment length at level 2 if the initial side is 360?
+A: 360 / 3^2 = 360 / 9 = 40 units.
+
+Q50: Compute P3, P4, and P5 for horizontal line (0,0) -> (30,0) at level 1.
+A: dx = 10, dy = 0 -> P3 = (10, 0), P4 = (20, 0),
+   x5 = 10 + 10*(0.5) = 15, y5 = 0 + 10*(0.866) = 8.66 -> P5 = (15, 8.66).

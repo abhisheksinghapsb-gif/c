@@ -1,0 +1,566 @@
+================================================================================
+        EXPERIMENT 3b: BOUNDARY FILL ALGORITHM (4- & 8-CONNECTED)
+                        File: assignment3b.cpp
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+  1. Quick Visual Overview (How the Program Flows)
+  2. 50-Point Complete Theory Breakdown
+  3. Step-by-Step Code Explanation (Start to End + Every Attribute & Parameter)
+  4. 50 Detailed Viva Questions & Answers
+
+
+================================================================================
+SECTION 1: QUICK VISUAL OVERVIEW (EXECUTION FLOW)
+================================================================================
+
+  START (main)
+     |
+     v
+  [1] Open 800x600 white window --> Bottom-left origin gluOrtho2D(0, 800, 0, 600)
+     |
+     v
+  [2] Set glPointSize(1.0) --> Register display(), mouse(), keyboard(), menu()
+     |
+     v
+  [3] display() clears screen to white --> drawBoundary() draws fixed Black
+      rectangle from (200, 150) to (600, 450)
+     |
+     +---> User Left-Clicks INSIDE rectangle (200 < wx < 600 && 150 < wy < 450)
+     |          |
+     |          v
+     |     mouse() calls boundaryFill(wx, wy) and sets filled = true
+     |          |
+     |          v
+     |     Iterative Stack Loop (vector<Point> points):
+     |       Pop (p.x, p.y) --> Inside 800x600 window?
+     |       Check GPU pixel via glReadPixels(1x1 pixel):
+     |         NOT Black (boundaryColor) AND NOT Red (fillColor)?
+     |           YES --> Plot 1 Red pixel via GL_POINTS + glFlush()
+     |                   Push 4 orthogonal neighbors (Right, Left, Up, Down)
+     |                   If fillMode == 8 --> also push 4 diagonal neighbors
+     |
+     +---> User Presses '4' / '8' / 'R' (or Right-Click Menu):
+           Updates fillMode (4 or 8) / resets filled = false --> Redraws screen
+
+
+================================================================================
+SECTION 2: 50-POINT COMPLETE THEORY BREAKDOWN
+================================================================================
+
+ 1. What Is Boundary Fill?: A seed-based area-filling algorithm that starts at
+    an interior seed pixel and paints connected pixels outward until it hits a
+    single specified boundary color.
+
+ 2. Core Condition: A pixel is painted with fillColor ONLY IF:
+    (pixel != boundaryColor) AND (pixel != fillColor).
+
+ 3. Seed Point: The starting pixel inside the closed region, chosen here by
+    left-clicking inside the rectangle (200..600, 150..450).
+
+ 4. Boundary Color: The single border color that stops the fill. In
+    assignment3b.cpp, boundaryColor[3] = {0.0, 0.0, 0.0} (pure Black).
+
+ 5. Fill Color: The color painted inside the region. In assignment3b.cpp,
+    fillColor[3] = {1.0, 0.0, 0.0} (pure Red).
+
+ 6. Boundary Fill vs. Flood Fill:
+    --> Boundary Fill stops at ONE specific border color; works even if the
+        interior already contains multiple different colors or patterns.
+    --> Flood Fill replaces ONE specific interior color; works even if the
+        border has multiple different colors.
+
+ 7. Major Limitation of Boundary Fill: If the boundary has multiple colors or
+    even a 1-pixel gap, the fill fails to recognize the edge and leaks out
+    across the entire screen.
+
+ 8. 4-Connected Boundary Fill (fillMode == 4): From every filled pixel (x, y),
+    pushes its 4 orthogonal neighbors:
+    (x+1, y), (x-1, y), (x, y+1), (x, y-1).
+
+ 9. 8-Connected Boundary Fill (fillMode == 8): Pushes the 4 orthogonal
+    neighbors PLUS the 4 diagonal neighbors:
+    (x+1, y+1), (x-1, y-1), (x+1, y-1), (x-1, y+1).
+
+10. Advantage of 4-Connected Fill: Cannot squeeze diagonally across thin
+    1-pixel slanted boundary lines, so it is leak-safe on diagonal edges.
+
+11. Limitation of 4-Connected Fill: Fails to fill narrow interior corners that
+    connect only diagonally across a single corner pixel.
+
+12. Advantage of 8-Connected Fill: Reaches and fills narrow diagonal corners
+    and diagonal interior pockets cleanly.
+
+13. Risk of 8-Connected Fill: If a polygon has thin 1-pixel diagonal borders
+    touching only at corners, 8-connected fill jumps diagonally across the
+    border and floods the outside background.
+
+14. Why 8-Connected Is Safe Here: The fixed boundary in assignment3b.cpp is an
+    axis-aligned rectangle (strictly horizontal and vertical edges), so
+    8-connected fill cannot leak diagonally across it.
+
+15. Iterative Stack vs. Recursion: Classic textbook boundaryFill calls itself
+    recursively, which crashes with a Stack Overflow on a 400 x 300 rectangle
+    (120,000 pixels). Using heap-allocated vector<Point> points prevents any
+    call-stack crash.
+
+16. Graph Traversal Order: Using points.push_back() and points.pop_back()
+    (LIFO stack) performs an iterative Depth-First Search (DFS).
+
+17. Why Check "!isSameColor(..., fillColor)"?: Without checking whether a
+    pixel is already painted red, neighbors would keep pushing already-red
+    pixels back onto the stack forever (infinite loop).
+
+18. Why Check "!isSameColor(..., boundaryColor)"?: Stops the fill whenever it
+    touches the black rectangle border.
+
+19. Screen Bounds Check: "if (p.x < 0 || p.x >= width || p.y < 0 || p.y >=
+    height) continue;" guarantees we never read/plot pixels outside the
+    800 x 600 window.
+
+20. Per-Pixel GPU Readback (glReadPixels): isSameColor() reads 1 single pixel
+    directly from the GPU frame buffer using glReadPixels(x, y, 1, 1, GL_RGB,
+    GL_UNSIGNED_BYTE, pixel).
+
+21. Float-to-Byte Color Conversion: boundaryColor and fillColor are stored as
+    floats (0.0 to 1.0), whereas glReadPixels returns unsigned char (0 to 255).
+    Multiplying by 255 and casting to (unsigned char) converts 1.0 -> 255 and
+    0.0 -> 0 for exact comparison.
+
+22. Why assignment3b.cpp Fills Slower Than assignment3a.cpp:
+    --> assignment3a.cpp reads the whole screen ONCE into RAM and fills in RAM.
+    --> assignment3b.cpp calls glReadPixels() twice and glFlush() once FOR
+        EVERY SINGLE PIXEL, stalling the CPU-GPU pipeline 120,000+ times.
+        This actually lets you visually watch the red fill sweep live!
+
+23. Fixed Rectangle Geometry: drawBoundary() draws a black GL_LINE_LOOP
+    rectangle from (200, 150) to (600, 450): width = 400 px, height = 300 px.
+
+24. Rectangle Interior Area: Roughly 399 * 299 = 119,301 interior pixels.
+
+25. Click Validation Guard: mouse() checks (wx > 200 && wx < 600 && wy > 150
+    && wy < 450) so clicking outside the rectangle or directly on the black
+    border is ignored instead of flooding the whole white window red!
+
+26. Hardcoded Repaint Seed in display(): If the window refreshes after filling
+    (filled == true), display() calls boundaryFill(400, 300) using the exact
+    centre of the rectangle (400, 300) as the seed.
+
+27. Coordinate System: Uses gluOrtho2D(0, width, 0, height) so (0, 0) is at the
+    bottom-left corner and (800, 600) is at the top-right corner.
+
+28. Mouse Coordinate Flip: GLUT mouse gives top-down y (0..600). Computing
+    wy = height - y flips it into bottom-up OpenGL coordinates.
+
+29. Why glPointSize(1.0) Is Critical Here: If point size were larger than 1.0
+    (like 2.0), a red dot plotted right next to the black border could overlap
+    and erase the black border pixels, causing the fill to leak outside!
+
+30. Why drawBoundary() Calls glFlush(): Forces the black rectangle to actually
+    appear in the frame buffer immediately so glReadPixels() can detect it.
+
+31. Why glColor3f(fillColor...) Is Set Once Before the While Loop: Since
+    OpenGL is a state machine, setting the red color once before the loop
+    keeps red active for every GL_POINTS vertex plotted inside the loop.
+
+32. Why glFlush() Inside the While Loop Matters: Ensures the red pixel just
+    plotted is committed to the frame buffer immediately so subsequent
+    glReadPixels() calls see it as red (not still white!).
+
+33. Keyboard Shortcuts:
+    --> '4': Switches to 4-connected mode, clears fill (filled = false).
+    --> '8': Switches to 8-connected mode, clears fill (filled = false).
+    --> 'r' or 'R': Resets screen (filled = false).
+
+34. Right-Click Menu: Attaches a GLUT pop-up menu to GLUT_RIGHT_BUTTON with:
+    1 = 4-Connected Fill, 2 = 8-Connected Fill, 3 = Reset.
+
+35. Menu vs. Keyboard Subtle Difference: Pressing '4' or '8' on the keyboard
+    sets filled = false (clearing the rectangle so you can click again), while
+    menu options 1 and 2 change fillMode without setting filled = false (so if
+    already filled, display() refills it in the new mode from (400, 300)).
+
+36. Single Buffering (GLUT_SINGLE): Used with glFlush() so pixels draw
+    directly onto the visible front buffer where glReadPixels() reads them.
+
+37. RGB Pixel Array: unsigned char pixel[3] holds 3 bytes: pixel[0] = Red,
+    pixel[1] = Green, pixel[2] = Blue.
+
+38. Time Complexity: O(N), where N is the number of interior pixels inside the
+    rectangle (~120,000 pixels), with constant work (4 or 8 pushes) per pixel.
+
+39. Space Complexity: O(N) for the points stack vector in RAM.
+
+40. Why 8-Connected Pushes Twice as Many Stack Entries: Each pixel pushes 8
+    neighbors instead of 4, roughly doubling the number of duplicate stack
+    checks (making 8-connected noticeably slower than 4-connected).
+
+41. Non-Uniform Interior Support: Unlike Flood Fill, if there were a blue
+    stripe or green dot inside the black rectangle, Boundary Fill would paint
+    right over it cleanly because neither blue nor green equals boundaryColor.
+
+42. Handling Concave Shapes: Like Flood Fill, Boundary Fill works on concave
+    and complex shapes as long as the entire border is closed in boundaryColor.
+
+43. What Happens If Fill Color == Boundary Color: Painting a pixel would turn
+    it into boundaryColor, stopping neighbors cleanly on that pixel -- still
+    terminates, though usually you want distinct colors.
+
+44. Why Struct Point Uses int x, y: glReadPixels() and pixel grid positions
+    are strictly discrete integer pixel coordinates.
+
+45. Clear Color: glClearColor(1.0, 1.0, 1.0, 1.0) paints the background opaque
+    White so the Black boundary and Red fill stand out clearly.
+
+46. Console Instructions: Printed in main() right before glutMainLoop() to
+    tell the user all mouse, keyboard, and right-click controls.
+
+47. Why Filled Flag Exists: Without tracking bool filled, resizing or
+    uncovering the window would call display() and wipe the red fill back to
+    an empty rectangle.
+
+48. Stack Overflow Prevention: On a 400x300 box, recursive depth can reach
+    over 100,000 frames (crashing an 8 MB stack). Heap vector<Point> uses
+    only ~1-2 MB safely.
+
+49. Advantages of Boundary Fill: Simple logic, works over multi-colored
+    interiors, supports both 4- and 8-connected modes, handles concave shapes.
+
+50. Disadvantages of Boundary Fill: Fails on multi-colored boundaries, leaks
+    through any 1-pixel gap, and per-pixel glReadPixels() is slow compared to
+    RAM-buffered or scanline filling.
+
+
+================================================================================
+SECTION 3: STEP-BY-STEP CODE EXPLANATION (START TO END)
+================================================================================
+
+--------------------------------------------------------------------------------
+STEP 1: HEADERS, GLOBALS & COLORS (Lines 1 - 21)
+--------------------------------------------------------------------------------
+  #include <iostream>   --> Console output (cout, endl).
+  #include <GL/glut.h>  --> OpenGL, GLU, and GLUT library APIs.
+  #include <vector>     --> Provides std::vector for the iterative DFS stack.
+  using namespace std;
+
+  int width = 800, height = 600; --> Window dimensions.
+  int fillMode = 4;              --> Active connectivity: 4 or 8.
+  bool filled = false;           --> Tracks whether rectangle is filled.
+  struct Point { int x, y; };    --> Integer pixel coordinate pair.
+
+  float boundaryColor[3] = {0.0, 0.0, 0.0}; --> Black border RGB (0.0..1.0).
+  float fillColor[3]     = {1.0, 0.0, 0.0}; --> Red fill RGB (0.0..1.0).
+
+--------------------------------------------------------------------------------
+STEP 2: drawBoundary() FUNCTION (Lines 24 - 36)
+--------------------------------------------------------------------------------
+  glColor3f(0.0, 0.0, 0.0); --> Sets color to Black.
+  glBegin(GL_LINE_LOOP);    --> Draws closed 4-sided rectangle outline:
+      (200, 150) -> (600, 150) -> (600, 450) -> (200, 450) -> back to (200, 150)
+  glEnd();
+  glFlush();                --> Commits border immediately to frame buffer.
+
+--------------------------------------------------------------------------------
+STEP 3: isSameColor() PIXEL CHECK HELPER (Lines 39 - 49)
+--------------------------------------------------------------------------------
+  Function Signature: bool isSameColor(int x, int y, float color[3])
+    --> Parameters:
+        x, y     : integer pixel coordinates to inspect
+        color[3] : float RGB array (0.0..1.0) to compare against
+
+  unsigned char pixel[3];
+  glReadPixels(x, y, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, pixel);
+    --> Reads 1x1 pixel at (x, y) from GPU buffer into pixel[0..2] (0..255).
+  Returns true if pixel[0], pixel[1], pixel[2] all equal
+  (unsigned char)(color[0..2] * 255).
+
+--------------------------------------------------------------------------------
+STEP 4: boundaryFill() CORE ALGORITHM (Lines 52 - 96)
+--------------------------------------------------------------------------------
+  Function Signature: void boundaryFill(int x, int y)
+    --> Parameters: x, y = interior seed pixel coordinates.
+
+  [4.1] Create stack vector<Point> points and push starting seed {x, y}.
+  [4.2] glColor3f(fillColor[0], fillColor[1], fillColor[2]); --> Set Red once.
+  [4.3] Loop while (!points.empty()):
+        --> Pop top Point p from points.
+        --> Bounds guard: skip if p.x < 0 || p.x >= width || p.y < 0 || p.y >= height.
+        --> Check: if (!isSameColor(p.x, p.y, boundaryColor) &&
+                       !isSameColor(p.x, p.y, fillColor))
+            {
+              Plot 1 pixel: glBegin(GL_POINTS); glVertex2i(p.x, p.y); glEnd();
+              glFlush(); --> Commit pixel so future glReadPixels sees it as Red!
+
+              Push 4-connected neighbors:
+                (p.x+1, p.y), (p.x-1, p.y), (p.x, p.y+1), (p.x, p.y-1)
+
+              If (fillMode == 8), also push 4 diagonal neighbors:
+                (p.x+1, p.y+1), (p.x-1, p.y-1), (p.x+1, p.y-1), (p.x-1, p.y+1)
+            }
+  [4.4] Final glFlush() at end of function.
+
+--------------------------------------------------------------------------------
+STEP 5: display() CALLBACK FUNCTION (Lines 99 - 112)
+--------------------------------------------------------------------------------
+  glClear(GL_COLOR_BUFFER_BIT); --> Clears window to White.
+  drawBoundary();               --> Draws Black rectangle.
+  if (filled) boundaryFill(400, 300); --> Re-fills from centre if active.
+  glFlush();
+
+--------------------------------------------------------------------------------
+STEP 6: mouse() CALLBACK FUNCTION (Lines 115 - 132)
+--------------------------------------------------------------------------------
+  Responds to GLUT_LEFT_BUTTON && GLUT_DOWN.
+  int wx = x; int wy = height - y; --> Converts GLUT top-down y to bottom-up.
+  if (wx > 200 && wx < 600 && wy > 150 && wy < 450):
+    --> Ensures click is strictly INSIDE the rectangle!
+    --> Calls glFlush(), boundaryFill(wx, wy), and sets filled = true.
+
+--------------------------------------------------------------------------------
+STEP 7: keyboard() & menu() CALLBACKS (Lines 135 - 180)
+--------------------------------------------------------------------------------
+  keyboard():
+    --> '4': fillMode = 4; filled = false; glutPostRedisplay();
+    --> '8': fillMode = 8; filled = false; glutPostRedisplay();
+    --> 'r'/'R': filled = false; glutPostRedisplay();
+  menu(int option):
+    --> 1: fillMode = 4;  2: fillMode = 8;  3: filled = false;
+    --> Calls glutPostRedisplay().
+
+--------------------------------------------------------------------------------
+STEP 8: main() FUNCTION - RUNTIME ENTRY POINT (Lines 183 - 224)
+--------------------------------------------------------------------------------
+  glutInit(&argc, argv);
+  glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
+  glutInitWindowSize(width, height); & glutInitWindowPosition(100, 100);
+  glutCreateWindow("Boundary Fill Algorithm");
+  glClearColor(1.0, 1.0, 1.0, 1.0);  --> White background.
+  gluOrtho2D(0, width, 0, height);   --> Bottom-left (0, 0) to (800, 600).
+  glPointSize(1.0);                  --> Strict 1-pixel dots to avoid border leak.
+  Registers display, mouse, keyboard, and attaches right-click menu.
+  Prints instructions and calls glutMainLoop().
+
+
+================================================================================
+SECTION 4: 50 DETAILED VIVA QUESTIONS & ANSWERS
+================================================================================
+
+Q1: What is the Boundary Fill algorithm?
+A: A seed-based region-filling algorithm that starts at an interior pixel and
+   paints connected pixels with a fill color until it encounters a single
+   specified boundary color.
+
+Q2: State the exact stopping condition in Boundary Fill.
+A: A pixel is filled only if its current color is NOT equal to boundaryColor
+   AND NOT equal to fillColor.
+
+Q3: How does Boundary Fill differ from Flood Fill?
+A: Boundary Fill checks against a single BOUNDARY color (allowing varied
+   colors inside the shape). Flood Fill checks against a single INTERIOR color
+   (allowing varied colors along the border).
+
+Q4: When is Boundary Fill preferred over Flood Fill?
+A: When the interior of the shape already contains multiple colors or patterns
+   that you want to paint over, while the outer border is one uniform color.
+
+Q5: When does Boundary Fill fail?
+A: If the polygon's border is drawn in multiple colors, or if the border has
+   even a 1-pixel gap, causing the fill to leak out across the whole screen.
+
+Q6: Explain 4-connected vs. 8-connected Boundary Fill.
+A: 4-connected expands only to top, bottom, left, and right neighbors.
+   8-connected expands to those 4 plus the 4 diagonal neighbors.
+
+Q7: Which 4 extra points are pushed when fillMode == 8?
+A: (p.x+1, p.y+1), (p.x-1, p.y-1), (p.x+1, p.y-1), and (p.x-1, p.y+1).
+
+Q8: What is the advantage of 8-connected over 4-connected?
+A: 8-connected can cross narrow diagonal corner connections inside a shape
+   that 4-connected fill gets blocked by and leaves unfilled.
+
+Q9: What is the danger of 8-connected fill on thin diagonal boundaries?
+A: On thin 1-pixel slanted borders where boundary pixels touch only at their
+   corners, 8-connected fill can jump diagonally right across the wall and
+   leak outside the shape.
+
+Q10: Why doesn't 8-connected fill leak out of the rectangle in assignment3b.cpp?
+A: Because the rectangle has strictly horizontal and vertical edges (no
+   diagonal edges), so adjacent boundary pixels share full flat sides.
+
+Q11: Why did you use an iterative vector<Point> stack instead of recursion?
+A: The 400 x 300 rectangle has ~120,000 interior pixels. Recursive calls would
+   exceed the CPU's call stack limit and crash with a Stack Overflow. Using
+   heap-allocated std::vector avoids stack overflow completely.
+
+Q12: What traversal order does vector<Point> points (push_back/pop_back) use?
+A: Iterative Depth-First Search (DFS / Last-In, First-Out stack order).
+
+Q13: Why must we check "!isSameColor(p.x, p.y, fillColor)" in addition to
+     checking boundaryColor?
+A: Without checking fillColor, pixels already painted red would still fail the
+   boundary check and get repainted and re-pushed onto the stack infinitely.
+
+Q14: Explain how isSameColor(int x, int y, float color[3]) works.
+A: It reads 1 pixel at (x, y) from the GPU via glReadPixels(x, y, 1, 1,
+   GL_RGB, GL_UNSIGNED_BYTE, pixel), then compares pixel[0..2] (0..255)
+   against (unsigned char)(color[0..2] * 255).
+
+Q15: Why do we multiply color[0..2] by 255 in isSameColor()?
+A: OpenGL glColor3f uses floats from 0.0 to 1.0, whereas glReadPixels with
+   GL_UNSIGNED_BYTE returns integer bytes from 0 to 255. Multiplying by 255
+   converts float RGB to byte RGB for accurate comparison.
+
+Q16: What are the 7 parameters of glReadPixels(x, y, 1, 1, GL_RGB,
+     GL_UNSIGNED_BYTE, pixel)?
+A: x, y (pixel location), 1, 1 (read width & height of 1 pixel), GL_RGB (3
+   channels), GL_UNSIGNED_BYTE (0..255 byte type), pixel (output array).
+
+Q17: Why is glPointSize(1.0) important in assignment3b.cpp (unlike 2.0 in
+     Exp 1 and Exp 2)?
+A: A point size > 1.0 would draw oversized red squares that spill over and
+   overwrite the 1-pixel black rectangle border, causing the fill to leak out!
+
+Q18: Why is glFlush() called INSIDE the while loop right after plotting each
+     red pixel?
+A: Because the very next iterations call glReadPixels() directly on the GPU
+   frame buffer. Calling glFlush() forces the newly drawn red pixel onto the
+   frame buffer immediately so isSameColor() sees it as red.
+
+Q19: Why is assignment3b.cpp visibly slower than assignment3a.cpp?
+A: assignment3b.cpp calls glReadPixels() and glFlush() inside the loop for
+   every single pixel (~120,000 CPU-GPU round trips), whereas assignment3a.cpp
+   reads the full screen ONCE into RAM, fills in RAM, and draws back ONCE.
+
+Q20: Why is 8-connected mode noticeably slower than 4-connected mode here?
+A: Every filled pixel pushes 8 neighbors instead of 4 onto the stack, causing
+   roughly twice as many glReadPixels() checks on already-filled pixels.
+
+Q21: What are the coordinates and size of the rectangle in drawBoundary()?
+A: Corners at (200,150), (600,150), (600,450), and (200,450) -- making it
+   400 pixels wide and 300 pixels tall, centered in the 800 x 600 window.
+
+Q22: Why does mouse() check "wx > 200 && wx < 600 && wy > 150 && wy < 450"?
+A: To ensure the user clicked strictly INSIDE the rectangle. Clicking outside
+   or directly on the black border is ignored so the white background outside
+   doesn't accidentally get flooded red.
+
+Q23: Why does mouse() use strictly ">" and "<" instead of ">=" and "<="?
+A: Coordinates equal to 200, 600, 150, or 450 sit directly ON the black border,
+   not inside the rectangle.
+
+Q24: Why does display() call boundaryFill(400, 300) when filled is true?
+A: (400, 300) is the exact centre of the rectangle. If the OS repaints the
+   window while filled is true, display() redraws the border and re-fills the
+   rectangle from its centre.
+
+Q25: Why does drawBoundary() call glFlush() at the end?
+A: To ensure the black rectangle outline is rendered into the frame buffer
+   before any glReadPixels() calls run.
+
+Q26: Why does assignment3b.cpp use gluOrtho2D(0, width, 0, height)?
+A: Because glReadPixels(x, y, ...) uses bottom-left pixel coordinates starting
+   at (0, 0). Setting gluOrtho2D(0, 800, 0, 600) aligns drawing coordinates
+   1-to-1 with frame buffer pixel coordinates.
+
+Q27: Why does mouse() convert Y with "wy = height - y"?
+A: GLUT mouse y increases downward (0 at top, 600 at bottom), whereas OpenGL
+   gluOrtho2D(0, 800, 0, 600) has y increasing upward (0 at bottom, 600 top).
+
+Q28: What does the bounds check (p.x < 0 || p.x >= width || p.y < 0 || p.y >=
+     height) prevent?
+A: Prevents reading or writing pixels outside the 800 x 600 window if the
+   fill were ever started outside a closed boundary.
+
+Q29: What does glClearColor(1.0, 1.0, 1.0, 1.0) do?
+A: Sets opaque White as the clearing background color.
+
+Q30: What does glClear(GL_COLOR_BUFFER_BIT) do?
+A: Clears the GPU color buffer and paints the entire window white.
+
+Q31: Why is GLUT_SINGLE used instead of GLUT_DOUBLE?
+A: With GLUT_SINGLE, drawing and glReadPixels() both operate directly on the
+   visible front buffer, allowing you to see the boundary fill happen live.
+
+Q32: What happens when you press '4' on the keyboard?
+A: Sets fillMode = 4, sets filled = false, triggers glutPostRedisplay() to
+   clear the rectangle, and prints "4-connected Boundary Fill Selected".
+
+Q33: What happens when you press '8' on the keyboard?
+A: Sets fillMode = 8, sets filled = false, triggers glutPostRedisplay() to
+   clear the rectangle, and prints "8-connected Boundary Fill Selected".
+
+Q34: What happens when you press 'r' or 'R'?
+A: Sets filled = false and calls glutPostRedisplay(), clearing the red fill
+   while keeping the black rectangle outline visible.
+
+Q35: How does the right-click menu work in assignment3b.cpp?
+A: glutCreateMenu(menu) binds our callback, glutAddMenuEntry() adds options
+   1 (4-Connected), 2 (8-Connected), and 3 (Reset), and glutAttachMenu()
+   binds it to GLUT_RIGHT_BUTTON.
+
+Q36: What is the difference between selecting "8-Connected" via keyboard '8'
+     versus the right-click menu?
+A: Keyboard '8' sets filled = false (clearing the rectangle to empty white).
+   Menu option 2 only sets fillMode = 8 and calls glutPostRedisplay() without
+   changing filled, so if already filled, display() immediately re-fills it.
+
+Q37: What is the time complexity of boundaryFill()?
+A: O(N), where N is the number of interior pixels inside the bounded region.
+
+Q38: What is the space complexity of boundaryFill()?
+A: O(N) auxiliary RAM for the points stack vector.
+
+Q39: What is the role of glColor3f(fillColor[0], fillColor[1], fillColor[2])
+     before the while loop?
+A: Sets OpenGL's active drawing color to Red once before plotting thousands of
+   GL_POINTS inside the loop.
+
+Q40: What does GL_LINE_LOOP do in drawBoundary()?
+A: Connects the 4 vertices in order and automatically draws the 4th closing
+   edge from (200, 450) back to (200, 150).
+
+Q41: Why is boundaryColor stored as float[3] instead of unsigned char[3]?
+A: Storing colors as float[3] (0.0..1.0) matches OpenGL's glColor3f() format
+   directly, and isSameColor() converts them to 0..255 when comparing against
+   glReadPixels().
+
+Q42: What happens if you click inside the rectangle a second time when it is
+     ALREADY completely red?
+A: boundaryFill() checks the clicked pixel, sees isSameColor(wx, wy, fillColor)
+   is true (already red), and terminates after 1 iteration without repainting.
+
+Q43: What does glutPostRedisplay() do?
+A: Schedules GLUT to call display() on the next iteration of glutMainLoop().
+
+Q44: What does glutInit(&argc, argv) do?
+A: Initializes GLUT and reads any command-line GLUT options; &argc lets GLUT
+   update the count if flags are extracted, while argv is already a pointer.
+
+Q45: What does glutMainLoop() do?
+A: Enters GLUT's infinite event loop, waiting for mouse clicks, keyboard keys,
+   right-click menu selections, and window redraws.
+
+Q46: Why does mouse() check "button == GLUT_LEFT_BUTTON && state == GLUT_DOWN"?
+A: To trigger boundaryFill() only on left-button press, ignoring button
+   release (GLUT_UP) and right-clicks (which open the pop-up menu).
+
+Q47: What happens if anti-aliasing (GL_LINE_SMOOTH) were turned on for the
+     black border?
+A: Border edges would have gray transition pixels (not pure black 0,0,0), so
+   Boundary Fill would paint over the gray fringe or even break through a
+   1-pixel anti-aliased edge.
+
+Q48: How could you speed up assignment3b.cpp by 100x?
+A: Read the whole 800 x 600 frame buffer ONCE into RAM (like assignment3a.cpp),
+   run the boundary fill completely in RAM, and draw it back once via
+   glDrawPixels().
+
+Q49: What is Scanline Boundary Fill?
+A: An optimized version that fills entire horizontal rows left-to-right until
+   hitting boundaryColor, pushing only one seed per unfilled span above and
+   below, drastically reducing stack usage and runtime.
+
+Q50: If we change fillColor to {0.0, 0.0, 1.0}, what changes on screen?
+A: Left-clicking inside the black rectangle will fill the entire interior with
+   pure Blue instead of Red, with no other code changes required!

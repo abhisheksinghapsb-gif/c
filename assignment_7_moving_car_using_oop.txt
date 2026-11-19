@@ -1,0 +1,601 @@
+================================================================================
+       EXPERIMENT 7: MOVING CAR ANIMATION USING OOP & POLYMORPHISM
+                        File: assignment7.cpp
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+  1. Quick Visual Overview (OOP Hierarchy & 60 FPS Animation Loop)
+  2. 50-Point Complete Theory Breakdown
+  3. Step-by-Step Code Explanation (Start to End + Every Attribute & Parameter)
+  4. 50 Detailed Viva Questions & Answers
+
+
+================================================================================
+SECTION 1: QUICK VISUAL OVERVIEW (OOP STRUCTURE & ANIMATION LOOP)
+================================================================================
+
+  OOP CLASS HIERARCHY (Abstraction + Inheritance + Runtime Polymorphism):
+
+            +---------------------------------------+
+            |  <<Abstract Base Class>> GameObject   |
+            +---------------------------------------+
+            |  + virtual void draw() = 0;  (PURE)   |
+            |  + virtual void update() {}           |
+            |  + virtual ~GameObject() {}           |
+            +---------------------------------------+
+                               ^
+                               |  public inheritance
+                               |
+            +---------------------------------------+
+            |           class Car                   |
+            +---------------------------------------+
+            |  - float x, y, speed; bool automatic; |
+            |  - void drawWheel(cx, cy, radius)     |
+            |  + Car()  [x=300, y=160, speed=2]     |
+            |  + void draw() override               |
+            |  + void update() override             |
+            |  + moveLeft(), moveRight(),           |
+            |    toggleMovement(), reset()          |
+            +---------------------------------------+
+
+  60 FPS ANIMATION & EVENT LOOP (Double Buffered):
+
+  START (main)
+     |
+     v
+  [1] Open 800x600 window with GLUT_DOUBLE | GLUT_RGB
+     |
+     v
+  [2] init() --> GL_PROJECTION: gluOrtho2D(0, 800, 0, 600)
+             --> GL_MODELVIEW:  glLoadIdentity()
+     |
+     v
+  [3] Register display(), keyboard(), specialKeys(), glutTimerFunc(16, timer, 0)
+     |
+     v
+  [4] CONTINUOUS TIMER LOOP (fires every 16 ms -> ~62.5 FPS):
+      timer() --> objects[0]->update() [if automatic: x += 2; wrap >850 -> -100]
+              --> glutPostRedisplay()  --> triggers display():
+                    1. glClear(GL_COLOR_BUFFER_BIT)
+                    2. drawBackground() [Sky, Sun, Mountains, Hills, Grass,
+                                         4 Trees, Road, Borders, Dividers]
+                    3. objects[0]->draw() [glPushMatrix -> glTranslatef(x,y,0)
+                                           -> Car parts & 2 wheels -> glPopMatrix]
+                    4. glutSwapBuffers() [smooth flicker-free frame flip!]
+              --> re-schedules glutTimerFunc(16, timer, 0)
+     |
+     +---> Left / Right Arrow (specialKeys) : car.moveLeft() / car.moveRight()
+     +---> Space / R / Q      (keyboard)    : toggle auto / reset / exit(0)
+
+
+================================================================================
+SECTION 2: 50-POINT COMPLETE THEORY BREAKDOWN
+================================================================================
+
+ 1. Core Purpose: Combines Object-Oriented Programming (OOP) in C++ with
+    smooth, flicker-free 2D OpenGL animation to simulate a moving car on a
+    scenic road.
+
+ 2. Four Pillars of OOP Demonstrated Here:
+    --> Abstraction   : Abstract base class GameObject hides drawing details.
+    --> Encapsulation : Car keeps x, y, speed, automatic, drawWheel() private.
+    --> Inheritance   : Car inherits publicly from GameObject.
+    --> Polymorphism  : GameObject *objects[1] = { &car } invokes Car's draw()
+                        and update() at runtime via virtual dispatch!
+
+ 3. Abstract Base Class (GameObject): A class containing at least one pure
+    virtual function ("= 0"). You CANNOT instantiate GameObject directly; it
+    serves as an interface/blueprint for all drawable scene objects.
+
+ 4. Pure Virtual Function (virtual void draw() = 0): Forces every derived
+    class (like Car) to implement its own draw() method; otherwise the
+    derived class is also abstract and cannot be created.
+
+ 5. Regular Virtual Function (virtual void update() {}): Provides a default
+    empty implementation so static objects don't have to override it, while
+    moving objects like Car can override it.
+
+ 6. Virtual Destructor (virtual ~GameObject() {}): Critical C++ best practice
+    in polymorphic hierarchies -- ensures deleting a derived object through a
+    base GameObject* pointer calls Car's destructor first, preventing leaks.
+
+ 7. Encapsulation in class Car: State variables (x, y, speed, automatic) and
+    helper drawWheel() are private so outside code can only change car state
+    safely through public methods (moveLeft, moveRight, toggleMovement, reset).
+
+ 8. override Keyword: Placed on "void draw() override" and "void update()
+    override" (C++11) so the compiler verifies they exactly match base-class
+    virtual signatures (catches typos at compile time).
+
+ 9. Runtime (Dynamic) Polymorphism: Calling objects[i]->draw() and
+    objects[i]->update() looks up the actual object's function in its vtable
+    at runtime -- letting you easily add a Bus, Cloud, or Bird to objects[]
+    later without changing display() or timer()!
+
+10. Car Constructor Initialization: Car() sets initial position x = 300,
+    y = 160 (sitting neatly on the road), speed = 2 px/frame, automatic = false.
+
+11. Local vs. World Car Coordinates: Inside Car::draw(), all car parts (body,
+    roof, windows, headlight, bumper, wheels at -65 and +65) are defined
+    around local origin (0, 0).
+
+12. GPU Translation via glTranslatef(x, y, 0): Instead of adding x and y to
+    dozens of car vertices manually on the CPU, glTranslatef(x, y, 0) shifts
+    the entire car as one single rigid unit on the GPU!
+
+13. Matrix Stack Isolation (glPushMatrix / glPopMatrix):
+    --> glPushMatrix() saves a clean copy of the ModelView matrix BEFORE
+        translating the car.
+    --> glPopMatrix() restores the clean matrix AFTER drawing the car so the
+        shift does not leak into other objects or future frames.
+
+14. Why Double Buffering (GLUT_DOUBLE) Is Essential Here: Drawing a complex
+    scene 60 times per second directly on a single buffer (GLUT_SINGLE) causes
+    severe visible flickering/tearing. Double buffering draws the entire next
+    frame on an invisible BACK buffer, then instantly flips it onto the FRONT
+    screen buffer via glutSwapBuffers().
+
+15. glutSwapBuffers() vs. glFlush(): glutSwapBuffers() swaps back and front
+    buffers in GLUT_DOUBLE mode (and automatically flushes); glFlush() is only
+    for GLUT_SINGLE static drawings.
+
+16. Timer-Driven Animation (glutTimerFunc): Unlike static experiments, moving
+    animation needs periodic updates. glutTimerFunc(16, timer, 0) schedules
+    timer() to fire after 16 milliseconds.
+
+17. Why 16 Milliseconds?: 1000 ms / 16 ms = 62.5 frames per second (~60 FPS),
+    matching standard monitor refresh rates for buttery-smooth motion.
+
+18. Self-Re-Scheduling Timer (One-Shot Rule): GLUT's glutTimerFunc() fires
+    ONLY ONCE per registration! Therefore timer() MUST call
+    glutTimerFunc(16, timer, 0) again at the end of itself to keep the
+    animation running continuously.
+
+19. Automatic Wrap-Around Motion: In Car::update(), when automatic is true,
+    x += speed (2 px/frame = ~125 px/sec). Once x > 850 (completely off the
+    right edge of the 800-wide screen), x wraps back to -100 (just off the
+    left edge) so the car seamlessly re-enters from the left!
+
+20. Manual Movement & Clamping:
+    --> moveLeft():  x -= 10, clamped at x = -100 so car can't vanish forever.
+    --> moveRight(): x += 10, clamped at x = 850.
+
+21. Toggle Flag Pattern: toggleMovement() executes "automatic = !automatic;",
+    flipping between paused (false) and driving (true) on every Spacebar press.
+
+22. Reset Method: reset() restores x = 300, y = 160, and automatic = false.
+
+23. Filled Circles Using GL_TRIANGLE_FAN: Both drawWheel() and drawCircle()
+    (used for the Sun) draw solid filled circles by placing the center vertex
+    first, followed by 361 perimeter points around 0..360 degrees.
+
+24. Circle Perimeter Trigonometry:
+    --> angle = i * 3.14159f / 180.0f  (degrees to radians)
+    --> px = cx + radius * cos(angle), py = cy + radius * sin(angle)
+
+25. Two-Layer Wheel Design: drawWheel(cx, cy, radius) first draws a dark
+    tire (0.05, 0.05, 0.05) of full radius (22), then draws a light silver hub
+    (0.75, 0.75, 0.75) of radius * 0.45 right on top!
+
+26. Painter's Algorithm (Layered Scene Depth): OpenGL draws shapes in exact
+    call order (later primitives paint over earlier ones). drawBackground()
+    paints from farthest to closest:
+    Sky -> Sun -> Mountains -> Green Hills -> Grass -> 4 Trees -> Road ->
+    White Borders -> Dashed Divider -> finally Car on top!
+
+27. Sky Rectangle: Blue GL_POLYGON from y = 200 to y = 600 across x = 0..800.
+
+28. Sun Circle: Golden-yellow GL_TRIANGLE_FAN at (680, 500) with radius 45.
+
+29. Three Mountains: Drawn together inside one GL_TRIANGLES block (9 vertices
+    = 3 blue-gray overlapping mountain triangles).
+
+30. Rolling Green Hills: Drawn as an 8-vertex GL_POLYGON sitting between
+    y = 200 and y = 340.
+
+31. Grass Strip: Green GL_POLYGON from y = 0 to y = 230 (the road later paints
+    over y = 0..200, leaving a clean 30-pixel grass verge from y = 200..230!).
+
+32. Procedural Trees Loop: "for (int i = 0; i < 4; i++)" computes horizontal
+    position tx = 80 + i * 210 (at x = 80, 290, 500, 710), drawing a brown
+    trunk (GL_POLYGON) topped by 2 stacked pine triangles (GL_TRIANGLES).
+
+33. Road & Lane Markings:
+    --> Asphalt road: Dark gray (0.2, 0.2, 0.2) from y = 0 to y = 200.
+    --> Solid white road borders at y = 15 and y = 185 (glLineWidth(4)).
+    --> Dashed white center divider at y = 100 (glLineWidth(5)), looping
+        i = 0 to 700 in steps of 100, drawing 50px dashes (i to i+50).
+
+34. Detailed Car Components (7 Sub-Parts in Car::draw()):
+    Orange body (8-vertex polygon), dark-red roof, left sky-blue window, right
+    sky-blue window, yellow headlight, dark-gray front bumper, and 2 wheels at
+    (-65, 0) and (+65, 0).
+
+35. Two Separate Keyboard Callbacks:
+    --> glutKeyboardFunc(keyboard): Handles ASCII keys (' ', 'r'/'R', 'q'/'Q').
+    --> glutSpecialFunc(specialKeys): Handles non-ASCII special keys
+        (GLUT_KEY_LEFT, GLUT_KEY_RIGHT).
+
+36. Why Arrow Keys Need glutSpecialFunc(): Arrow keys do not have standard
+    ASCII codes, so glutKeyboardFunc() cannot detect them; GLUT provides
+    integer key constants like GLUT_KEY_LEFT through glutSpecialFunc().
+
+37. Matrix Modes in init():
+    --> glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluOrtho2D(0,800,0,600);
+        Sets the 2D viewing coordinate system cleanly on the Projection matrix.
+    --> glMatrixMode(GL_MODELVIEW); glLoadIdentity();
+        Switches back to ModelView matrix so glPushMatrix/glTranslatef inside
+        Car::draw() transform the car, NOT the projection camera!
+
+38. Why glLoadIdentity() Is Called in init(): Resets the active matrix to the
+    identity matrix before applying gluOrtho2D(), preventing accidental
+    stacking of old matrix transformations.
+
+39. Coordinate System: gluOrtho2D(0, 800, 0, 600) puts (0, 0) at the
+    bottom-left corner and (800, 600) at the top-right corner.
+
+40. Clean Exit ('q'/'Q'): Calls exit(0) (from <cstdlib>) to terminate
+    glutMainLoop() and close the window immediately.
+
+41. Why Car Wheel Center Y Is 0 Inside Local Space: Since car is translated to
+    y = 160, local y = 0 places wheel centers at world y = 160 and wheel
+    bottoms at 160 - 22 = 138, sitting cleanly on the upper lane of the road!
+
+42. Base Class Pointer Array: GameObject *objects[1] = { &car }; stores the
+    address of car inside a base-class pointer array to showcase polymorphic
+    loops in display() and timer().
+
+43. Why objects[i]->draw() Uses Arrow (->) Instead of Dot (.): Because
+    objects[i] is a POINTER (GameObject*), not an object value. The arrow
+    operator dereferences the pointer and calls the virtual member function.
+
+44. Why keyboard() Uses car.reset() (Dot Operator): Because car is the actual
+    Car object instance (not a pointer), and reset()/moveLeft()/moveRight()
+    are Car-specific methods not declared on GameObject.
+
+45. Float Suffix 'f' (e.g., 1.0f, 3.14159f): Explicitly tells C++ the literal
+    is a 32-bit float rather than a 64-bit double, matching glColor3f and
+    glVertex2f without implicit double-to-float conversion.
+
+46. GL_POLYGON Convexity Note: Car body and green hills use GL_POLYGON; since
+    the hills have slight dips, modern OpenGL would triangulate them, though
+    GLUT drivers usually render simple star-convex polygons fine.
+
+47. Frame Rate Independence Concept: Moving by fixed 2 px per 16 ms timer tick
+    gives smooth ~125 pixels/second motion.
+
+48. Time Complexity Per Frame: O(1) constant work per frame (fixed background
+    shapes + 1 car + 360-step circles for sun and 2 wheels = ~1,100 vertices).
+
+49. Space Complexity: O(1) constant memory (1 Car instance + 1 pointer array).
+
+50. Extensibility of This OOP Design: To add a second car, cloud, or bird, you
+    just derive a new class from GameObject, override draw() and update(), and
+    add its address to objects[] -- display() and timer() need zero changes!
+
+
+================================================================================
+SECTION 3: STEP-BY-STEP CODE EXPLANATION (START TO END)
+================================================================================
+
+--------------------------------------------------------------------------------
+STEP 1: HEADERS & ABSTRACT BASE CLASS GameObject (Lines 1 - 21)
+--------------------------------------------------------------------------------
+  #include <GL/glut.h>, <iostream>, <cstdlib> (for exit(0)), <cmath> (sin/cos).
+  class GameObject:
+    --> virtual void draw() = 0;  : Pure virtual -> makes GameObject abstract!
+    --> virtual void update() {}  : Virtual with empty default implementation.
+    --> virtual ~GameObject() {}  : Virtual destructor for safe cleanup.
+
+--------------------------------------------------------------------------------
+STEP 2: DERIVED CLASS Car - PRIVATE DATA & drawWheel() (Lines 24 - 61)
+--------------------------------------------------------------------------------
+  class Car : public GameObject
+  private:
+    float x, y;     --> World position of the car's local origin.
+    float speed;    --> Pixels moved per timer tick (2.0).
+    bool automatic; --> True when auto-driving, false when stopped.
+
+  void drawWheel(float cx, float cy, float radius):
+    --> Outer tire: dark gray (0.05,0.05,0.05), GL_TRIANGLE_FAN centered at
+        (cx, cy), loop i = 0..360 computing (cx + r*cos, cy + r*sin).
+    --> Inner rim: light gray (0.75,0.75,0.75), GL_TRIANGLE_FAN with radius*0.45.
+
+--------------------------------------------------------------------------------
+STEP 3: class Car - PUBLIC CONSTRUCTOR & METHODS (Lines 63 - 191)
+--------------------------------------------------------------------------------
+  Car() constructor: x = 300; y = 160; speed = 2; automatic = false;
+
+  void draw() override:
+    [3.1] glPushMatrix(); glTranslatef(x, y, 0); --> Shift car to (x, y).
+    [3.2] Draws orange body, dark-red roof, left & right cyan windows, yellow
+          headlight, dark-gray front bumper using GL_POLYGON.
+    [3.3] Calls drawWheel(-65, 0, 22) (rear) and drawWheel(65, 0, 22) (front).
+    [3.4] glPopMatrix(); --> Restores clean ModelView matrix.
+
+  void update() override:
+    --> If (automatic) { x += speed; if (x > 850) x = -100; } (screen wrap).
+
+  moveLeft()       : x -= 10; clamps at -100.
+  moveRight()      : x += 10; clamps at 850.
+  toggleMovement() : automatic = !automatic;
+  reset()          : x = 300; y = 160; automatic = false;
+
+--------------------------------------------------------------------------------
+STEP 4: GLOBAL OBJECTS, drawCircle() & drawBackground() (Lines 194 - 337)
+--------------------------------------------------------------------------------
+  Car car;
+  GameObject *objects[1] = { &car }; --> Base pointer array for polymorphism!
+
+  drawCircle(x, y, radius): GL_TRIANGLE_FAN filled circle used for the Sun.
+  drawBackground(): Paints scene back-to-front (Painter's Order):
+    Sky -> Sun (680,500,r=45) -> 3 Mountains (GL_TRIANGLES) -> Green hills ->
+    Grass -> 4 Trees (loop tx = 80 + i*210) -> Gray Road (0..200) -> White
+    borders (y=15, y=185, width 4) -> White dashed divider (y=100, width 5).
+
+--------------------------------------------------------------------------------
+STEP 5: display(), timer(), keyboard() & specialKeys() (Lines 340 - 404)
+--------------------------------------------------------------------------------
+  display():
+    --> glClear(GL_COLOR_BUFFER_BIT);
+    --> drawBackground();
+    --> Polymorphic draw: for (int i = 0; i < 1; i++) objects[i]->draw();
+    --> glutSwapBuffers(); --> Flips back buffer to front (zero flicker!).
+
+  timer(int value):
+    --> Polymorphic update: for (int i = 0; i < 1; i++) objects[i]->update();
+    --> glutPostRedisplay();
+    --> glutTimerFunc(16, timer, 0); --> Re-arms timer for next 16 ms frame!
+
+  keyboard(unsigned char key, int mouseX, int mouseY):
+    --> ' ' (Space) : car.toggleMovement();
+    --> 'r' / 'R'   : car.reset();
+    --> 'q' / 'Q'   : exit(0);
+    --> glutPostRedisplay();
+
+  specialKeys(int key, int mouseX, int mouseY):
+    --> GLUT_KEY_LEFT  : car.moveLeft();
+    --> GLUT_KEY_RIGHT : car.moveRight();
+    --> glutPostRedisplay();
+
+--------------------------------------------------------------------------------
+STEP 6: init() & main() RUNTIME FLOW (Lines 407 - 455)
+--------------------------------------------------------------------------------
+  init():
+    --> glClearColor(1, 1, 1, 1);
+    --> glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluOrtho2D(0,800,0,600);
+    --> glMatrixMode(GL_MODELVIEW);  glLoadIdentity();
+
+  main():
+    --> glutInit(&argc, argv);
+    --> glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB); --> Double buffering!
+    --> glutInitWindowSize(800, 600); glutInitWindowPosition(100, 100);
+    --> glutCreateWindow("Experiment 7 - Moving Car using OOP");
+    --> init();
+    --> Registers display, keyboard, specialKeys, and initial timer(16 ms).
+    --> Prints controls and enters glutMainLoop().
+
+
+================================================================================
+SECTION 4: 50 DETAILED VIVA QUESTIONS & ANSWERS
+================================================================================
+
+Q1: Which OOP concepts are demonstrated in assignment7.cpp?
+A: Abstraction (abstract GameObject), Encapsulation (private data/helper in
+   Car), Inheritance (Car : public GameObject), and Runtime Polymorphism
+   (GameObject* calling virtual draw() and update()).
+
+Q2: What makes GameObject an abstract class?
+A: It contains a pure virtual function: "virtual void draw() = 0;".
+
+Q3: Can you create an object of GameObject directly (e.g., "GameObject g;")?
+A: No -- C++ forbids instantiating an abstract class directly. You can only
+   create pointers/references to it (GameObject*) pointing to derived classes.
+
+Q4: What is the difference between a pure virtual function (= 0) and a regular
+    virtual function in GameObject?
+A: Pure virtual draw() = 0 MUST be overridden by every concrete derived class.
+   Regular virtual update() {} provides an optional default empty body.
+
+Q5: Why does GameObject have a virtual destructor "virtual ~GameObject() {}"?
+A: If a derived object is ever deleted through a GameObject* base pointer, a
+   virtual destructor guarantees the derived class destructor runs first,
+   preventing memory leaks.
+
+Q6: What is the purpose of the "override" keyword on Car::draw() and update()?
+A: Tells the compiler to verify that this method truly overrides a virtual
+   function from the base class, catching signature typos at compile time.
+
+Q7: How is Encapsulation implemented in class Car?
+A: x, y, speed, automatic, and drawWheel() are private, so external code can
+   only manipulate the car safely through public methods like moveLeft(),
+   moveRight(), toggleMovement(), and reset().
+
+Q8: How is Runtime Polymorphism demonstrated in display() and timer()?
+A: "GameObject *objects[1] = { &car };" holds a base-class pointer to car.
+   Calling objects[i]->draw() and objects[i]->update() dynamically resolves to
+   Car::draw() and Car::update() at runtime via the vtable.
+
+Q9: What is the practical benefit of using GameObject *objects[]?
+A: You can add new classes (Truck, Cloud, Bird) derived from GameObject and
+   drop them into objects[] without changing a single line of display() or
+   timer() logic.
+
+Q10: Why is "objects[i]->draw()" called with "->" while "car.reset()" uses "."?
+A: objects[i] is a pointer (GameObject*), so "->" dereferences it. car is a
+   direct object instance, so "." accesses its member directly.
+
+Q11: What does Car's constructor initialize?
+A: Sets x = 300, y = 160, speed = 2, and automatic = false.
+
+Q12: How does the car move smoothly across the screen without recalculating
+     every vertex on the CPU?
+A: Car::draw() defines all parts around local (0, 0) and calls
+   glTranslatef(x, y, 0) to shift the entire car on the GPU in one step.
+
+Q13: Why must glPushMatrix() and glPopMatrix() wrap Car::draw()?
+A: glPushMatrix() saves the current ModelView matrix before glTranslatef(x,y,0),
+   and glPopMatrix() restores it afterward so the translation doesn't affect
+   the background or accumulate infinitely across frames.
+
+Q14: What would happen if you removed glPushMatrix() and glPopMatrix()?
+A: Every frame would add another glTranslatef(x, y, 0) on top of the previous
+   frame's translation, making the car and background shoot off screen!
+
+Q15: Why does assignment7.cpp use GLUT_DOUBLE instead of GLUT_SINGLE?
+A: Because this is a 60 FPS continuous animation. GLUT_SINGLE draws directly on
+   screen causing ugly flickering; GLUT_DOUBLE renders the full next frame on
+   a hidden back buffer and flips it cleanly onto the screen.
+
+Q16: Why is glutSwapBuffers() called at the end of display() instead of
+     glFlush()?
+A: glutSwapBuffers() pairs with GLUT_DOUBLE to swap the hidden back buffer
+   into the visible front buffer smoothly without flickering.
+
+Q17: Explain how glutTimerFunc(16, timer, 0) creates smooth animation.
+A: It schedules timer() to execute after 16 milliseconds (1000 / 16 = ~62.5
+   FPS). Each tick updates car position and triggers a redraw.
+
+Q18: Why must timer() call glutTimerFunc(16, timer, 0) again at its end?
+A: Because GLUT timers are one-shot (they fire only once). Re-registering the
+   timer inside timer() creates a continuous ~60 FPS animation loop.
+
+Q19: What happens if you forget glutTimerFunc(16, timer, 0) inside timer()?
+A: The car moves only 1 frame (2 pixels) and then stops animating forever.
+
+Q20: Explain the wrap-around logic in Car::update().
+A: When automatic is true, x += speed (2 px). Once x > 850 (fully past the
+   800-wide right edge), x resets to -100 (just off the left edge) so the car
+   smoothly loops back onto screen from the left.
+
+Q21: Why wrap at x > 850 and reset to -100 instead of 800 and 0?
+A: Because the car body spans from local -110 to +115 around x! Waiting until
+   850 lets the rear end clear the screen, and starting at -100 lets the nose
+   enter gradually instead of popping in abruptly.
+
+Q22: How much does moveLeft() and moveRight() move the car, and how are they
+     bounded?
+A: Each arrow press moves x by 10 pixels; moveLeft() clamps at x = -100 and
+   moveRight() clamps at x = 850 so you can't drive infinitely off screen.
+
+Q23: How does pressing Spacebar work?
+A: keyboard() catches case ' ' and calls car.toggleMovement(), which flips
+   "automatic = !automatic;" to start or pause automatic driving.
+
+Q24: What happens when you press 'r' or 'R'?
+A: Calls car.reset(), restoring x = 300, y = 160, and automatic = false.
+
+Q25: What happens when you press 'q' or 'Q'?
+A: Calls exit(0) (from <cstdlib>) to cleanly terminate the program and close
+   the GLUT window.
+
+Q26: Why do we need BOTH glutKeyboardFunc() AND glutSpecialFunc()?
+A: glutKeyboardFunc() only detects standard ASCII keys (Space, R, Q). Arrow
+   keys (GLUT_KEY_LEFT, GLUT_KEY_RIGHT) have no ASCII codes and must be
+   handled through glutSpecialFunc().
+
+Q27: Why is GL_TRIANGLE_FAN used in drawWheel() and drawCircle()?
+A: Placing the circle centre first followed by 361 perimeter vertices creates
+   a fan of 360 triangles sharing the centre, drawing a solid filled circle.
+
+Q28: How are the two layers of each wheel drawn in drawWheel()?
+A: First a dark tire (0.05, 0.05, 0.05) of full radius (22), then a silver
+   inner hub (0.75, 0.75, 0.75) of radius * 0.45 drawn right on top.
+
+Q29: Why is angle converted via "i * 3.14159f / 180.0f" inside drawWheel() and
+     drawCircle()?
+A: Loop counter i runs in degrees (0..360), while C++ cos() and sin() expect
+   radians.
+
+Q30: What is Painter's Algorithm, and how does drawBackground() use it?
+A: Drawing farthest objects first and closest objects last so closer layers
+   naturally cover distant layers: Sky -> Sun -> Mountains -> Hills -> Grass ->
+   Trees -> Road -> Markings -> Car.
+
+Q31: Why does display() call drawBackground() BEFORE objects[i]->draw()?
+A: If the car were drawn first, the road and grass inside drawBackground()
+   would paint right over the car and hide it!
+
+Q32: How are the 4 trees positioned in drawBackground()?
+A: A for-loop (i = 0..3) computes tx = 80 + i * 210, placing trees evenly at
+   x = 80, 290, 500, and 710.
+
+Q33: What primitives build each tree?
+A: A brown rectangular trunk (GL_POLYGON) topped by 2 stacked green pine
+   triangles (GL_TRIANGLES).
+
+Q34: How is the dashed white road divider drawn?
+A: At y = 100 with glLineWidth(5), a loop steps i from 0 to 700 in increments
+   of 100, drawing 50-pixel white line segments from (i, 100) to (i + 50, 100)
+   with 50-pixel gaps between them.
+
+Q35: Explain the 4 matrix lines inside init().
+A: 1) glMatrixMode(GL_PROJECTION) selects the camera/projection matrix.
+   2) glLoadIdentity() resets it to clean identity.
+   3) gluOrtho2D(0, 800, 0, 600) sets 2D bottom-left coordinates.
+   4) glMatrixMode(GL_MODELVIEW); glLoadIdentity(); switches back to ModelView
+      so glTranslatef() moves objects, not the projection camera!
+
+Q36: What would break if init() did NOT switch back to GL_MODELVIEW?
+A: glPushMatrix/glTranslatef inside Car::draw() would modify the Projection
+   matrix instead of the ModelView matrix (bad practice and can overflow the
+   tiny Projection matrix stack, which only holds 2 matrices!).
+
+Q37: What does glLoadIdentity() do?
+A: Replaces the active 4x4 OpenGL matrix with the identity matrix (1s on
+   diagonal, 0s elsewhere), wiping out any previous matrix transforms.
+
+Q38: What coordinate system does assignment7.cpp use?
+A: Bottom-left (0, 0) to top-right (800, 600) via gluOrtho2D(0, 800, 0, 600).
+
+Q39: What does glClearColor(1, 1, 1, 1) and glClear(GL_COLOR_BUFFER_BIT) do?
+A: Clears the back buffer to white at the start of each frame before
+   drawBackground() paints the sky, grass, and road over it.
+
+Q40: What does "int value" mean in "void timer(int value)"?
+A: An optional integer ID passed as the 3rd argument of glutTimerFunc(16,
+   timer, 0) to distinguish between multiple timers if a program uses several.
+
+Q41: Why does timer() call glutPostRedisplay()?
+A: Updating x inside objects[i]->update() only changes a number in RAM;
+   glutPostRedisplay() tells GLUT to call display() so the car actually
+   redraws at its new position.
+
+Q42: Why is drawWheel() private inside class Car while drawCircle() is a free
+     global function?
+A: drawWheel() is an internal implementation detail belonging exclusively to
+   Car (encapsulation), whereas drawCircle() is a general utility used by
+   drawBackground() for the Sun.
+
+Q43: What is the difference between GL_TRIANGLES and GL_TRIANGLE_FAN?
+A: GL_TRIANGLES takes every 3 separate vertices to make independent triangles
+   (used for mountains and tree leaves). GL_TRIANGLE_FAN shares vertex 0
+   across all triangles (ideal for filled circles).
+
+Q44: What does the 'f' suffix in 0.35f mean?
+A: Marks the constant as a 32-bit float instead of a 64-bit double, directly
+   matching glColor3f() float parameters.
+
+Q45: Where are the car's two wheels placed relative to the car's local center?
+A: Rear wheel at (-65, 0) and front wheel at (+65, 0), both with radius 22.
+
+Q46: Can the car move while automatic is false?
+A: Yes -- Left Arrow and Right Arrow call moveLeft() and moveRight() directly
+   regardless of whether automatic is true or false.
+
+Q47: What happens if you press Left Arrow while automatic mode is ON?
+A: moveLeft() shifts x left by 10 px immediately, and then automatic update()
+   continues driving it right at 2 px per 16 ms frame.
+
+Q48: What does glutInit(&argc, argv) do?
+A: Initializes GLUT and reads command-line flags; &argc lets GLUT modify the
+   count if flags are removed, while argv is already a pointer.
+
+Q49: What does glutMainLoop() do?
+A: Enters GLUT's infinite event loop, continuously dispatching display,
+   timer, keyboard, and specialKeys callbacks until exit(0) or window close.
+
+Q50: How would you double the car's automatic driving speed?
+A: Change "speed = 2;" to "speed = 4;" inside the Car() constructor (or
+   reduce the timer interval from 16 ms to 8 ms).

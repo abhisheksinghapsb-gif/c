@@ -1,0 +1,451 @@
+================================================================================
+            EXPERIMENT 6: CUBIC BEZIER FRACTAL PATTERN (TREE)
+                        File: assignment6.cpp
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+  1. Quick Visual Overview (How Curve & Recursion Flow)
+  2. 50-Point Complete Theory Breakdown
+  3. Step-by-Step Code Explanation (Start to End + Every Attribute & Parameter)
+  4. 50 Detailed Viva Questions & Answers
+
+
+================================================================================
+SECTION 1: QUICK VISUAL OVERVIEW (EXECUTION & RECURSION FLOW)
+================================================================================
+
+  START (main)
+     |
+     v
+  [1] Print console instructions (depth=5 | '+' increase | '-' decrease | 'R' reset)
+     |
+     v
+  [2] Open 800x600 window --> init() sets BLACK bg + centered (-400..400, -300..300)
+     |
+     v
+  [3] Register display(), keyboard() --> Enter glutMainLoop()
+     |
+     v
+  [4] display() clears screen to BLACK and starts trunk recursion:
+      bezierFractal(x = 0, y = -250, angle = 90 deg, length = 130, level = depth)
+           |
+           v
+      Is level == 0?  --> YES: return; (STOP SIGN!)
+           |
+           NO
+           v
+      [a] Convert angle -> rad = angle * PI / 180.0
+      [b] Find branch tip: (xEnd, yEnd) = (x + len*cos(rad), y + len*sin(rad))
+      [c] Place 2 opposite curve magnets (creates smooth organic S-curve):
+            P1 (x1, y1) at 30% length, tilted LEFT  (+0.25 rad)
+            P2 (x2, y2) at 70% length, tilted RIGHT (-0.25 rad)
+      [d] Call drawBezier(x, y, x1, y1, x2, y2, xEnd, yEnd):
+            Loop t = 0.00 to 1.00 (step 0.02 -> 51 points, 50 segments)
+            Connect points in GREEN (2px wide) using GL_LINE_STRIP
+      [e] Spawn 2 smaller child branches from tip (xEnd, yEnd):
+            LEFT  child: angle + 35 deg, length * 0.68, level - 1
+            RIGHT child: angle - 35 deg, length * 0.68, level - 1
+     |
+     +---> Keyboard '+' (max 9), '-' (min 1), 'R' (reset to 5) --> Redraw tree!
+
+
+================================================================================
+SECTION 2: 50-POINT COMPLETE THEORY BREAKDOWN
+================================================================================
+
+ 1. What Is a Bezier Curve?: A smooth parametric curve defined by guide points
+    called control points.
+
+ 2. Inventor: Developed in the 1960s by French engineer Pierre Bezier (Renault)
+    and independently by Paul de Casteljau.
+
+ 3. Cubic Bezier Curve: Degree-3 curve defined by 4 control points:
+    P0(x0, y0), P1(x1, y1), P2(x2, y2), and P3(x3, y3).
+
+ 4. Endpoint Interpolation: The curve ALWAYS starts exactly at P0 (t = 0) and
+    ends exactly at P3 (t = 1).
+
+ 5. Intermediate Control Points (P1, P2): Generally NOT touched by the curve;
+    they act like magnets pulling and bending the curve into a smooth arc.
+
+ 6. Parametric Variable (t): Moves from 0 (start) to 1 (end), acting like a
+    progress percentage from 0% to 100%.
+
+ 7. Complement Variable (u): Defined as u = 1 - t to simplify the cubic formula.
+
+ 8. Cubic Bezier Equations:
+    --> x(t) = u^3*x0 + 3*u^2*t*x1 + 3*u*t^2*x2 + t^3*x3
+    --> y(t) = u^3*y0 + 3*u^2*t*y1 + 3*u*t^2*y2 + t^3*y3
+
+ 9. Bernstein Basis Polynomials: The four weights (u^3, 3*u^2*t, 3*u*t^2, t^3)
+    come from the binomial expansion (u + t)^3 = 1.
+
+10. Partition of Unity: For every t in [0, 1], the 4 blending weights always
+    sum to exactly 1.
+
+11. Convex Hull Property: Every point on the curve lies strictly inside the
+    convex polygon formed by its 4 control points P0, P1, P2, P3.
+
+12. Tangent Property: Curve leaves P0 tangent to P0->P1 and arrives at P3
+    tangent to P2->P3.
+
+13. Symmetry Property: Reversing control points traces the exact same curve
+    backward.
+
+14. Curve Sampling (GL_LINE_STRIP): OpenGL draws straight lines, so we sample
+    51 points along t (step 0.02) and connect them into 50 tiny segments that
+    look completely smooth.
+
+15. Why Loop Uses "t <= 1.001" Instead of "t <= 1.0": Adding 0.02 fifty times
+    in binary float can give 1.0000001. Checking <= 1.001 guarantees the last
+    endpoint (t = 1.0) is never skipped due to float rounding error!
+
+16. What Is a Fractal?: A self-similar geometric pattern where smaller parts
+    are scaled-down copies of the whole structure, built using recursion.
+
+17. Bezier Fractal Tree Concept: Combines cubic Bezier curves with binary
+    recursion so every branch is a graceful curved stem splitting into 2
+    smaller curved branches at its tip.
+
+18. Branch Tip Formula (Polar to Cartesian):
+    --> xEnd = x + length * cos(rad)
+    --> yEnd = y + length * sin(rad)
+
+19. Degree-to-Radian Conversion: Angles are passed in human-friendly degrees
+    (90, +35, -35) and converted via rad = angle * PI / 180.0 for sin()/cos().
+
+20. Control Point 1 (x1, y1): Placed at 30% of branch length (0.30) rotated
+    +0.25 radians (~14.3 deg) to the LEFT.
+
+21. Control Point 2 (x2, y2): Placed at 70% of branch length (0.70) rotated
+    -0.25 radians (~14.3 deg) to the RIGHT.
+
+22. Why Opposite Offsets (+0.25 and -0.25) Are Used: Pulling the lower part
+    left and the upper part right bends every branch into a natural S-curve.
+
+23. What If 0.25 Were 0?: Both magnets would sit directly on the straight line
+    between start and tip, turning the tree into stiff straight sticks.
+
+24. Base Case of Recursion: "if (level == 0) return;" stops recursion so the
+    program does not crash with a Stack Overflow.
+
+25. Binary Splitting Rule: At (xEnd, yEnd), makes 2 recursive calls:
+    --> Left branch:  angle + 35 deg, length * 0.68, level - 1
+    --> Right branch: angle - 35 deg, length * 0.68, level - 1
+
+26. Branch Shrink Factor (0.68): Each child branch is 68% the length of its
+    parent so the canopy tapers realistically and stays inside the window.
+
+27. Branch Spread Angle (+/- 35 deg): Creates a symmetric 70-degree fork at
+    every branch tip.
+
+28. Trunk Starting Inputs in display(): Start (0, -250), angle 90 deg
+    (straight up), length 130, level = depth (initially 5).
+
+29. Why Start at (0, -250)?: Bottom edge is y = -300, so starting near the
+    bottom gives 550 units of vertical space for the tree to grow upward.
+
+30. Why Angle = 90 Points Up: In Cartesian coordinates, 0 deg = right (+X),
+    90 deg = straight up (+Y), 180 deg = left (-X), 270 deg = down (-Y).
+
+31. Numerical Check of Main Trunk:
+    Start (0, -250), angle 90 deg (cos=0, sin=1), length 130
+    --> xEnd = 0, yEnd = -250 + 130 = -120.
+    Children start at (0, -120) with length 88.4 at angles 125 deg and 55 deg.
+
+32. Total Branches Formula: Depth d draws (2^d - 1) curved Bezier branches.
+
+33. Branch Counts by Depth:
+    --> depth = 1 (min): 2^1 - 1 = 1 branch (trunk only)
+    --> depth = 2:       3 branches
+    --> depth = 3:       7 branches
+    --> depth = 5 (init):31 branches
+    --> depth = 9 (max): 2^9 - 1 = 511 branches (~26,061 vertices!)
+
+34. Why Max Depth Is Capped at 9: Branch count doubles every +1 depth
+    (exponential O(2^d)). Above depth 9, tens of thousands of curves cause lag.
+
+35. Why Min Depth Is 1: Dropping to 0 hits the base case immediately and draws
+    a blank black screen.
+
+36. Traversal Order: Pre-order Depth-First Traversal (draw current branch ->
+    finish entire left subtree -> finish entire right subtree).
+
+37. Time Complexity: O(2^depth), since every non-base call makes 2 recursive
+    calls and each curve evaluates a constant 51 points.
+
+38. Space Complexity: O(depth) call-stack frames (max 9 frames deep at once).
+
+39. Keyboard Controls:
+    --> '+' : depth++ (if depth < 9)
+    --> '-' : depth-- (if depth > 1)
+    --> 'r' or 'R' : resets depth = 5
+
+40. Visual Styling: Black background (0,0,0,1), pure bright Green branches
+    (0,1,0), and glLineWidth(2) for bold curves.
+
+41. Coordinate System: gluOrtho2D(-400, 400, -300, 300) puts (0, 0) at the
+    centre of the 800 x 600 window.
+
+42. User-Defined init() Function: Sets black clear color and centered
+    projection once after window creation.
+
+43. Single Buffering (GLUT_SINGLE): Paired with glFlush() because the fractal
+    only redraws when pressing +, -, or R.
+
+44. Constant PI: const float PI = 3.14159265; prevents accidental modification.
+
+45. Float Precision: glVertex2f(x, y) preserves smooth fractional points along
+    the cubic curve.
+
+46. No Vertex Storage Array Needed: All curves are computed and drawn on the
+    fly during recursion, using minimal RAM.
+
+47. Numerical Midpoint Check (t = 0.5, u = 0.5): Weights are 0.125, 0.375,
+    0.375, 0.125 (sum = 1.0), heavily shaped by P1 and P2.
+
+48. Affine Invariance: Moving/rotating/scaling the 4 control points moves the
+    entire curve identically.
+
+49. Bezier Tree vs. Koch Snowflake (Exp 6b): Exp 6 draws curved Bezier stems
+    splitting 2 ways (2^d - 1 curves); Exp 6b splits straight triangle edges
+    4 ways (3 * 4^level lines).
+
+50. Real-World Applications: Vector fonts (TrueType/SVG), Adobe Illustrator
+    pen tool, animation motion paths, and procedural foliage in games.
+
+
+================================================================================
+SECTION 3: STEP-BY-STEP CODE EXPLANATION (START TO END)
+================================================================================
+
+--------------------------------------------------------------------------------
+STEP 1: HEADERS, CONSTANT PI & GLOBAL depth (Lines 1 - 8)
+--------------------------------------------------------------------------------
+  #include <GL/glut.h>, <iostream>, <cmath>; using namespace std;
+  const float PI = 3.14159265; --> Pi constant for degree-to-radian conversion.
+  int depth = 5;               --> Global recursion depth modified by keyboard()
+                                   and read by display().
+
+--------------------------------------------------------------------------------
+STEP 2: drawBezier() - DRAW ONE CUBIC BEZIER CURVE (Lines 11 - 35)
+--------------------------------------------------------------------------------
+  Parameters: (x0,y0) start, (x1,y1) magnet 1, (x2,y2) magnet 2, (x3,y3) end.
+  glBegin(GL_LINE_STRIP);
+  for (float t = 0; t <= 1.001; t += 0.02) {
+      float u = 1 - t;
+      float x = u*u*u*x0 + 3*u*u*t*x1 + 3*u*t*t*x2 + t*t*t*x3;
+      float y = u*u*u*y0 + 3*u*u*t*y1 + 3*u*t*t*y2 + t*t*t*y3;
+      glVertex2f(x, y);
+  }
+  glEnd();
+    --> Evaluates 51 smooth 2D float points and connects them into one curve.
+
+--------------------------------------------------------------------------------
+STEP 3: bezierFractal() - RECURSIVE BRANCHING (Lines 38 - 68)
+--------------------------------------------------------------------------------
+  Parameters: x, y (branch base), angle (degrees), length, level (depth left).
+  [3.1] Base case: if (level == 0) return;
+  [3.2] Convert angle to radians: rad = angle * PI / 180.0;
+  [3.3] Compute tip: xEnd = x + length*cos(rad), yEnd = y + length*sin(rad).
+  [3.4] Compute opposite magnets for S-curve:
+        P1 at 30% length, rad + 0.25 | P2 at 70% length, rad - 0.25.
+  [3.5] Set glColor3f(0, 1, 0) (Green) & glLineWidth(2); call drawBezier(...).
+  [3.6] Two recursive calls from (xEnd, yEnd):
+        bezierFractal(xEnd, yEnd, angle + 35, length * 0.68, level - 1);
+        bezierFractal(xEnd, yEnd, angle - 35, length * 0.68, level - 1);
+
+--------------------------------------------------------------------------------
+STEP 4: display(), keyboard(), init() & main() (Lines 70 - 123)
+--------------------------------------------------------------------------------
+  display(): glClear(GL_COLOR_BUFFER_BIT); bezierFractal(0,-250,90,130,depth);
+             glFlush();
+  keyboard(unsigned char key, int x, int y):
+    --> '+' && depth < 9 -> depth++
+    --> '-' && depth > 1 -> depth--
+    --> 'r' || 'R'       -> depth = 5
+    --> Calls glutPostRedisplay().
+  init(): glClearColor(0, 0, 0, 1); gluOrtho2D(-400, 400, -300, 300);
+  main(): Prints instructions, opens 800x600 window (GLUT_SINGLE | GLUT_RGB),
+          calls init(), registers display & keyboard, enters glutMainLoop().
+
+
+================================================================================
+SECTION 4: 50 DETAILED VIVA QUESTIONS & ANSWERS
+================================================================================
+
+Q1: What is a Bezier curve?
+A: A smooth parametric curve shaped by control points; it starts at the first
+   point, ends at the last, and bends smoothly toward the inner control points.
+
+Q2: What type of Bezier curve is used in assignment6.cpp?
+A: A Cubic Bezier curve (degree 3) using 4 control points: P0, P1, P2, P3.
+
+Q3: Write the cubic Bezier equation used in drawBezier().
+A: With u = 1 - t (0 <= t <= 1):
+   x = u^3*x0 + 3*u^2*t*x1 + 3*u*t^2*x2 + t^3*x3
+   y = u^3*y0 + 3*u^2*t*y1 + 3*u*t^2*y2 + t^3*y3.
+
+Q4: What are the four weight terms (u^3, 3*u^2*t, 3*u*t^2, t^3) called?
+A: Cubic Bernstein basis polynomials; they always sum to 1 for any t.
+
+Q5: What is the range of parameter t?
+A: 0 to 1. t = 0 gives exact start (x0, y0); t = 1 gives exact end (x3, y3).
+
+Q6: Why is the loop condition "t <= 1.001" instead of "t <= 1.0"?
+A: Binary float additions of 0.02 fifty times can yield 1.0000001. Checking
+   <= 1.001 guarantees the final endpoint (t = 1.0) is never skipped.
+
+Q7: How many vertices and segments does drawBezier() draw per branch?
+A: 51 vertices (t = 0.00, 0.02, ..., 1.00) connected into 50 line segments.
+
+Q8: Why is GL_LINE_STRIP used instead of GL_LINE_LOOP or GL_POINTS?
+A: GL_LINE_STRIP connects all 51 points into one smooth open curve.
+   GL_LINE_LOOP would draw a straight closing line back to the base; GL_POINTS
+   would leave disconnected dots.
+
+Q9: What does "float u = 1 - t;" do?
+A: Precomputes (1 - t) once per iteration to keep the formula clean and fast.
+
+Q10: Does a cubic Bezier curve pass through P1 and P2?
+A: Generally no; P1 and P2 act as directional magnets bending the curve.
+
+Q11: What is the convex hull property of Bezier curves?
+A: The entire curve stays strictly inside the convex polygon formed by P0..P3.
+
+Q12: What is a fractal?
+A: A self-similar recursive pattern whose smaller parts resemble scaled-down
+   copies of the whole shape.
+
+Q13: What is the base case in bezierFractal() and why is it critical?
+A: "if (level == 0) return;". Without it, infinite recursion would overflow
+   the call stack and crash the program.
+
+Q14: Why convert angle using "rad = angle * PI / 180.0"?
+A: Branch angles are passed in readable degrees (90, +/-35), while <cmath>
+   cos() and sin() require radians.
+
+Q15: How is the branch tip (xEnd, yEnd) calculated?
+A: xEnd = x + length * cos(rad); yEnd = y + length * sin(rad).
+
+Q16: How are control points P1(x1, y1) and P2(x2, y2) placed?
+A: P1 at 30% of length tilted +0.25 rad left; P2 at 70% of length tilted
+   -0.25 rad right.
+
+Q17: Why do P1 and P2 use opposite offsets (+0.25 and -0.25)?
+A: Pulling lower-left and upper-right shapes every branch into an organic S.
+
+Q18: What unit is 0.25 in "rad + 0.25"?
+A: Radians (~14.3 degrees), because rad is already in radians.
+
+Q19: What happens if 0.25 is changed to 0?
+A: P1 and P2 lie straight along the line, turning the tree into straight sticks.
+
+Q20: What are the two recursive calls at the bottom of bezierFractal()?
+A: Starting at (xEnd, yEnd): Left (angle+35, length*0.68, level-1) and Right
+   (angle-35, length*0.68, level-1).
+
+Q21: Why multiply length by 0.68 on each recursive level?
+A: Shrinks each child generation to 68% of parent length so the tree tapers
+   naturally and stays inside the window.
+
+Q22: What happens if 0.68 were changed to 1.2?
+A: Child branches would grow larger than parents and explode off screen.
+
+Q23: What does +/- 35 represent?
+A: Symmetric branching angle in degrees (70 deg total fork spread).
+
+Q24: Explain the 5 arguments in "bezierFractal(0, -250, 90, 130, depth);".
+A: Start (0, -250) near bottom-center, pointing up at 90 deg, trunk length 130,
+   recursion depth = global depth (initially 5).
+
+Q25: Why start at (0, -250) instead of (0, 0)?
+A: Screen Y goes -300 to +300; starting near the bottom gives 550 units of
+   vertical growth room.
+
+Q26: How many total branches are drawn at depth d?
+A: (2^d) - 1 branches.
+
+Q27: How many branches are drawn at initial depth = 5?
+A: 2^5 - 1 = 31 branches.
+
+Q28: How many branches are drawn at max depth = 9?
+A: 2^9 - 1 = 511 branches.
+
+Q29: How many branches are drawn at min depth = 1?
+A: 2^1 - 1 = 1 branch (just the curved trunk).
+
+Q30: Why cap depth at 9 ("depth < 9")?
+A: Branch count doubles every level (O(2^d)); above 9, vertex count explodes
+   and slows rendering.
+
+Q31: Why set minimum depth to 1 ("depth > 1")?
+A: Depth 0 would hit "if (level == 0) return;" immediately and show a blank
+   black screen.
+
+Q32: What is the time complexity of bezierFractal()?
+A: O(2^depth), exponential in recursion depth.
+
+Q33: What is the space complexity (call-stack depth)?
+A: O(depth), holding at most depth stack frames at any instant.
+
+Q34: In what order are branches drawn?
+A: Pre-order Depth-First: draw parent -> complete entire left subtree ->
+   complete entire right subtree.
+
+Q35: What do keys '+', '-', and 'r'/'R' do?
+A: '+' increases depth (max 9), '-' decreases depth (min 1), 'r'/'R' resets
+   depth to 5, then calls glutPostRedisplay().
+
+Q36: What color is the background and what color is the tree?
+A: Black background via glClearColor(0, 0, 0, 1); bright Green tree via
+   glColor3f(0, 1, 0).
+
+Q37: What does glClear(GL_COLOR_BUFFER_BIT) do?
+A: Wipes the color buffer to black before redrawing the tree at the new depth.
+
+Q38: What does glLineWidth(2) do?
+A: Makes all drawn Bezier curves 2 pixels thick.
+
+Q39: How could you make the trunk thick and twigs thin?
+A: Replace glLineWidth(2) with glLineWidth(level).
+
+Q40: Why use glVertex2f instead of glVertex2i?
+A: Bezier polynomials return floating-point coordinates; glVertex2f keeps
+   curves smooth without integer stair-stepping.
+
+Q41: What is init() in assignment6.cpp?
+A: A user-defined setup function called once after glutCreateWindow() to set
+   the black clear color and centered gluOrtho2D(-400, 400, -300, 300).
+
+Q42: How is (0, 0) centered in the 800 x 600 window?
+A: Via gluOrtho2D(-400, 400, -300, 300).
+
+Q43: Why use GLUT_SINGLE and glFlush() here?
+A: The tree is static between key presses (no continuous animation).
+
+Q44: What does glutPostRedisplay() do in keyboard()?
+A: Signals GLUT to run display() on the next loop iteration to draw the new
+   depth.
+
+Q45: What does glutInit(&argc, argv) do?
+A: Initializes GLUT and parses command-line flags; &argc passes argc by
+   address so GLUT can update it, while argv is already a pointer.
+
+Q46: What does glutMainLoop() do?
+A: Starts GLUT's infinite event loop waiting for redraws and key presses.
+
+Q47: Why is PI marked "const float PI = 3.14159265;"?
+A: Prevents accidental modification anywhere in the code.
+
+Q48: What happens if you press an unused key like 'x'?
+A: depth stays unchanged; glutPostRedisplay() simply redraws the same tree.
+
+Q49: What is the difference between a quadratic and a cubic Bezier curve?
+A: Quadratic uses 3 control points (degree 2); cubic uses 4 control points
+   (degree 3, allowing S-shaped curves with an inflection point).
+
+Q50: Compute the exact tip (xEnd, yEnd) of the initial trunk (0, -250, 90, 130).
+A: rad = 90 * PI / 180 = PI / 2; cos = 0, sin = 1.
+   xEnd = 0 + 130*0 = 0; yEnd = -250 + 130*1 = -120 --> Tip is (0, -120).

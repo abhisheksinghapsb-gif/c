@@ -1,0 +1,568 @@
+================================================================================
+           EXPERIMENT 1b: BRESENHAM'S LINE DRAWING ALGORITHM
+                        File: assignment1b.cpp
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+  1. Quick Visual Overview (How All 8 Octants Are Reduced to 1 Loop)
+  2. 50-Point Complete Theory Breakdown
+  3. Step-by-Step Code Explanation (Start to End + Every Attribute & Parameter)
+  4. 50 Detailed Viva Questions & Answers
+
+
+================================================================================
+SECTION 1: QUICK VISUAL OVERVIEW (EXECUTION & 8-OCTANT FLOW)
+================================================================================
+
+  START (main)
+     |
+     v
+  [1] Console menu (1. Simple, 2. Dotted, 3. Dashed) --> Read lineStyle
+     |
+     v
+  [2] Open 800x600 white window --> Center origin via gluOrtho2D(-400,400,-300,300)
+     |
+     v
+  [3] User clicks 2 endpoints --> mouse() converts to (wx,wy) --> display() calls:
+
+            Bresenham(xa, ya, xb, yb)
+                       |
+                       v
+        [Trick 1] Is dy > dx (steep)?
+                  YES --> swap(xa, ya) & swap(xb, yb)   [8 octants -> 4]
+                       |
+                       v
+        [Trick 2] Is xa > xb (right-to-left)?
+                  YES --> swap(xa, xb) & swap(ya, yb)   [4 octants -> 2]
+                       |
+                       v
+        [Trick 3] Is ya < yb (going up)?
+                  YES --> yStep = +1, NO --> yStep = -1 [2 octants -> 1 loop]
+                       |
+                       v
+        [Loop] p = 2*dy - dx;  for i = 0..dx:
+                  Plot (y, xa+i) if steep, else (xa+i, y)
+                  If p >= 0 --> y += yStep; p -= 2*dx
+                  Always    --> p += 2*dy
+
+
+================================================================================
+SECTION 2: 50-POINT COMPLETE THEORY BREAKDOWN
+================================================================================
+
+ 1. Inventor & Year: Developed by Jack E. Bresenham in 1962 at IBM for
+    plotting straight lines on digital drum plotters.
+
+ 2. Core Purpose: Scan-converts a continuous mathematical line segment into
+    discrete raster pixels on a screen grid.
+
+ 3. Pure Integer Arithmetic: Its biggest strength is using ONLY integer
+    addition, subtraction, and multiplication by 2 (bit-shifting in hardware).
+
+ 4. Zero Floating-Point Operations: Unlike DDA, Bresenham's algorithm never
+    uses float/double variables, division, or round() inside the drawing loop.
+
+ 5. Incremental Decision Making: At each step along the driving axis, it picks
+    between only two candidate pixels using a single integer error variable.
+
+ 6. Decision Parameter (p): An integer variable that tracks whether the true
+    mathematical line lies closer to the current row (y) or the next row
+    (y + yStep).
+
+ 7. Basic Octant Assumption: Standard derivation assumes a gentle positive
+    slope (0 <= m <= 1) drawn left-to-right (xa < xb, dx >= dy).
+
+ 8. Two Candidate Pixels: Moving from (xk, yk) to xk + 1, the next pixel must
+    be either East (xk + 1, yk) or North-East (xk + 1, yk + 1).
+
+ 9. Exact Line Height: At x = xk + 1, the true mathematical line passes at
+    y_true = m*(xk + 1) + c.
+
+10. Lower Distance (d1): Vertical gap from the lower pixel yk up to the true
+    line is d1 = y_true - yk.
+
+11. Upper Distance (d2): Vertical gap from the true line up to the upper pixel
+    yk + 1 is d2 = (yk + 1) - y_true.
+
+12. Comparing Distances: Compute (d1 - d2) = 2*y_true - 2*yk - 1.
+    --> If d1 - d2 < 0: lower pixel is closer (keep y).
+    --> If d1 - d2 >= 0: upper pixel is closer (step y).
+
+13. Removing Fractions: Substituting m = dy / dx introduces division by dx.
+    Multiplying (d1 - d2) by dx clears the fraction completely and keeps every
+    term an exact integer.
+
+14. Decision Parameter Definition: p_k = dx * (d1 - d2) = 2*dy*xk - 2*dx*yk + C.
+
+15. Initial Decision Parameter (p0): Evaluated at the start point, it
+    simplifies cleanly to p = 2 * dy - dx.
+
+16. Update Rule When p < 0: True line is closer to current y. Keep y unchanged
+    and update p = p + 2 * dy.
+
+17. Update Rule When p >= 0: True line is closer to next y. Update y += yStep
+    and update p = p + 2 * dy - 2 * dx.
+
+18. Two-Line Update Trick in assignment1b.cpp:
+    --> if (p >= 0) { y += yStep; p -= 2 * dx; }
+    --> p += 2 * dy;
+    Because 2*dy is added in BOTH cases, putting p += 2*dy outside the if
+    handles both p < 0 and p >= 0 cleanly without an else block.
+
+19. Covering All 8 Octants: Every line is a combination of 3 choices:
+    steep/gentle (2) * left/right (2) * up/down (2) = 8 octants.
+
+20. Trick 1 - Handling Steep Lines (|m| > 1): Check bool steep = (dy > dx).
+    If true, swap(xa, ya) and swap(xb, yb). This reflects the line across
+    y = x so the steep slope becomes a gentle slope.
+
+21. Un-Swapping When Plotting Steep Lines: Whenever steep is true, we plot
+    glVertex2i(y, xa + i) instead of glVertex2i(xa + i, y) so the pixel lands
+    at its true steep screen position.
+
+22. Trick 2 - Handling Right-to-Left Lines: Check if (xa > xb). If true, swap
+    the start and end points (swap(xa, xb); swap(ya, yb);) so the loop always
+    moves forward left-to-right (xa + i).
+
+23. Recomputing dx and dy After Swaps: After the steep and left-to-right swaps,
+    dx = abs(xb - xa) and dy = abs(yb - ya) are recalculated so dx is always
+    the driving-axis span and dx >= dy.
+
+24. Trick 3 - Handling Negative Slopes (yStep): int yStep = (ya < yb) ? 1 : -1.
+    If going upward, y steps by +1; if going downward, y steps by -1.
+
+25. Horizontal Lines (dy = 0): p starts at -dx < 0 and 2*dy = 0, so p stays
+    negative forever and y never changes.
+
+26. Vertical Lines (dx = 0): steep becomes true (dy > 0), swapping X and Y so
+    it computes like a horizontal line and plots vertically via (y, xa + i).
+
+27. 45-Degree Diagonal Lines (dx = dy): p starts at dx >= 0, so y steps on
+    every single iteration.
+
+28. Same-Point Click (xa == xb && ya == yb): dx = 0, dy = 0. The loop runs
+    once for i = 0, plots the single point safely, and ends with no divide-by-0.
+
+29. Total Pixels Plotted: Loop runs from i = 0 to i <= dx, plotting (dx + 1)
+    pixels along the dominant axis.
+
+30. Time Complexity: O(max(|dx|, |dy|)), linear in pixel length.
+
+31. Space Complexity: O(1) constant auxiliary space.
+
+32. Zero Floating-Point Drift: Exact integer math guarantees the line never
+    drifts off course even across huge coordinates.
+
+33. Exact Endpoints & Symmetry: Guaranteed to pass through both endpoints and
+    produces identical pixels whether drawn A -> B or B -> A.
+
+34. Hardware Speed: Multiplying by 2 (2*dy, 2*dx) is just a 1-bit left shift
+    in hardware, requiring no floating-point unit (FPU).
+
+35. Line Styles in Bresenham: Just like DDA, the loop counter i controls
+    Simple (all i), Dotted (i % 5 == 0), and Dashed ((i / 10) % 2 == 0).
+
+36. Why p and y Still Update on Skipped Pixels: Even when a dotted or dashed
+    pixel is not plotted, the decision parameter p and y MUST still update at
+    the bottom of the loop so the line keeps its correct slope.
+
+37. Aliasing: Like DDA, Bresenham illuminates pixels fully on or off, causing
+    a staircase ("jaggies") effect on slanted lines.
+
+38. Relationship to Midpoint Line Algorithm: Mathematically identical to
+    testing the implicit line equation at the midpoint (xk + 1, yk + 0.5).
+
+39. Bresenham vs. DDA: Bresenham is faster (integer-only, no round()) and more
+    accurate (no float drift), while DDA is slightly shorter to write.
+
+40. Numerical Example Setup: Draw a line from (2, 2) to (8, 5).
+    --> dx = 6, dy = 3 (not steep since 3 <= 6; left-to-right; yStep = +1)
+    --> 2*dy = 6, 2*dx = 12, initial p = 2*3 - 6 = 0
+
+41. Numerical Example Trace:
+    --> i = 0: plot (2, 2). p = 0 >= 0 --> y = 3, p = 0 - 12 + 6 = -6
+    --> i = 1: plot (3, 3). p = -6 < 0 --> y = 3, p = -6 + 6 = 0
+    --> i = 2: plot (4, 3). p = 0 >= 0 --> y = 4, p = 0 - 12 + 6 = -6
+    --> i = 3: plot (5, 4). p = -6 < 0 --> y = 4, p = -6 + 6 = 0
+    --> i = 4: plot (6, 4). p = 0 >= 0 --> y = 5, p = 0 - 12 + 6 = -6
+    --> i = 5: plot (7, 5). p = -6 < 0 --> y = 5, p = -6 + 6 = 0
+    --> i = 6: plot (8, 5). Loop ends!
+
+42. Centered Coordinate System: gluOrtho2D(-400, 400, -300, 300) puts (0, 0)
+    at the exact center of the 800 x 600 window.
+
+43. Mouse Coordinate Conversion: Converts GLUT top-left (x, y) to centered
+    Cartesian (wx, wy) via wx = x - 400 and wy = 300 - y.
+
+44. Single-Buffered Rendering: Uses GLUT_SINGLE | GLUT_RGB and glFlush()
+    because the scene is static until the user clicks or presses a key.
+
+45. Clear Color vs. Clear Buffer: glClearColor(1, 1, 1, 1) selects white;
+    glClear(GL_COLOR_BUFFER_BIT) paints the color buffer white on each frame.
+
+46. Point Size: glPointSize(2.0) renders each plotted pixel 2x2 pixels wide so
+    the red line is clearly visible.
+
+47. Callback Architecture: Registers display(), mouse(), and keyboard() with
+    GLUT and hands control to glutMainLoop().
+
+48. Interactive Controls: Keys '1', '2', '3' switch line styles and clear the
+    screen; 'r'/'R' resets clickCount to 0.
+
+49. Reference Axes: drawAxes() uses GL_LINES in gray (0.5, 0.5, 0.5) to draw
+    the X and Y axes dividing the 4 quadrants.
+
+50. Real-World Applications: GPU line rasterizers, OLED/LCD microcontroller
+    drivers, CNC/laser plotters, and 2D grid line-of-sight calculations.
+
+
+================================================================================
+SECTION 3: STEP-BY-STEP CODE EXPLANATION (START TO END)
+================================================================================
+
+--------------------------------------------------------------------------------
+STEP 1: HEADER FILES & NAMESPACE (Lines 1 - 7)
+--------------------------------------------------------------------------------
+  #include <iostream>   --> Console input/output (cin, cout).
+  #include <GL/glut.h>  --> OpenGL, GLU, and GLUT library functions.
+  #include <cmath>      --> Standard math header (included for consistency;
+                            Bresenham itself uses pure integer math).
+  #include <algorithm>  --> Provides swap() used to flip coordinates/endpoints.
+  #include <cstdlib>    --> Provides abs() for integer absolute values.
+  using namespace std;  --> Allows using cout, cin, swap without std:: prefix.
+
+--------------------------------------------------------------------------------
+STEP 2: GLOBAL VARIABLES (Lines 9 - 12)
+--------------------------------------------------------------------------------
+  int startX, startY, endX, endY; --> Store Cartesian start and end clicks.
+  int clickCount = 0;             --> 0 = no click, 1 = start set, 2 = draw.
+  int lineStyle = 1;              --> 1 = Simple, 2 = Dotted, 3 = Dashed.
+
+--------------------------------------------------------------------------------
+STEP 3: Bresenham() FUNCTION - THE LINE ALGORITHM (Lines 14 - 93)
+--------------------------------------------------------------------------------
+  Function Signature: void Bresenham(int xa, int ya, int xb, int yb)
+    --> Parameters:
+        xa, ya : integer start coordinates
+        xb, yb : integer end coordinates
+
+  [3.1] Measure spans and check steepness:
+        int dx = abs(xb - xa);
+        int dy = abs(yb - ya);
+        bool steep = (dy > dx);
+          --> True when vertical change exceeds horizontal change (|m| > 1).
+
+  [3.2] Trick 1 - Reflect steep lines across y = x:
+        if (steep) {
+            swap(xa, ya);
+            swap(xb, yb);
+        }
+          --> Turns steep lines into gentle lines so the driving axis is X.
+
+  [3.3] Trick 2 - Normalize left-to-right:
+        if (xa > xb) {
+            swap(xa, xb);
+            swap(ya, yb);
+        }
+          --> Ensures xa <= xb so the loop always increments x forward (xa + i).
+
+  [3.4] Recompute spans after swaps:
+        dx = abs(xb - xa);
+        dy = abs(yb - ya);
+          --> Guarantees dx >= dy and both are non-negative integers.
+
+  [3.5] Trick 3 - Set vertical step direction:
+        int yStep = (ya < yb) ? 1 : -1;
+          --> Ternary operator: +1 if line climbs upward, -1 if it goes down.
+
+  [3.6] Initialize decision parameter and starting Y:
+        int p = 2 * dy - dx;
+        int y = ya;
+
+  [3.7] Plot pixels inside GL_POINTS loop:
+        glBegin(GL_POINTS);
+        for (int i = 0; i <= dx; i++) {
+          --> lineStyle == 1 (Simple): plots every step i.
+          --> lineStyle == 2 (Dotted): plots only if (i % 5 == 0).
+          --> lineStyle == 3 (Dashed): plots only if ((i / 10) % 2 == 0).
+
+          Inside each style check:
+              if (steep) glVertex2i(y, xa + i);
+              else       glVertex2i(xa + i, y);
+                --> If we swapped X and Y earlier for a steep line, we swap
+                    them back here so the dot lands at the true coordinate!
+
+          Update decision parameter (runs EVERY iteration):
+              if (p >= 0) {
+                  y += yStep;
+                  p -= 2 * dx;
+              }
+              p += 2 * dy;
+        }
+        glEnd();
+
+--------------------------------------------------------------------------------
+STEP 4: drawAxes() FUNCTION (Lines 95 - 111)
+--------------------------------------------------------------------------------
+  glColor3f(0.5, 0.5, 0.5); --> Medium gray.
+  glBegin(GL_LINES);
+      glVertex2i(-400, 0); glVertex2i(400, 0);   --> X-axis
+      glVertex2i(0, -300); glVertex2i(0, 300);   --> Y-axis
+  glEnd();
+
+--------------------------------------------------------------------------------
+STEP 5: display() CALLBACK FUNCTION (Lines 113 - 128)
+--------------------------------------------------------------------------------
+  glClear(GL_COLOR_BUFFER_BIT); --> Wipes color buffer to white.
+  drawAxes();                   --> Draws gray X and Y axes.
+  if (clickCount == 2) {
+      glColor3f(1.0, 0.0, 0.0); --> Pure Red.
+      Bresenham(startX, startY, endX, endY);
+  }
+  glFlush();                    --> Sends queued commands to screen immediately.
+
+--------------------------------------------------------------------------------
+STEP 6: mouse() CALLBACK FUNCTION (Lines 130 - 156)
+--------------------------------------------------------------------------------
+  void mouse(int button, int state, int x, int y)
+    --> Responds to GLUT_LEFT_BUTTON && GLUT_DOWN.
+    --> Converts screen (x, y) to centered Cartesian:
+        int wx = x - 400;
+        int wy = 300 - y;
+    --> Click 1 sets (startX, startY) and clickCount = 1.
+    --> Click 2 sets (endX, endY) and clickCount = 2.
+    --> Calls glutPostRedisplay() to trigger display().
+
+--------------------------------------------------------------------------------
+STEP 7: keyboard() CALLBACK FUNCTION (Lines 158 - 186)
+--------------------------------------------------------------------------------
+  void keyboard(unsigned char key, int x, int y)
+    --> '1', '2', '3': Switches lineStyle, sets clickCount = 0, prints status.
+    --> 'r' or 'R': Resets clickCount = 0 to clear the drawn line.
+    --> Calls glutPostRedisplay().
+
+--------------------------------------------------------------------------------
+STEP 8: main() FUNCTION - RUNTIME ENTRY POINT (Lines 188 - 235)
+--------------------------------------------------------------------------------
+  [8.1] Prints console menu and reads initial lineStyle (defaults to 1 if
+        outside 1..3).
+  [8.2] glutInit(&argc, argv); --> Starts GLUT with command-line arguments.
+  [8.3] glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB); --> Single buffer + RGB.
+  [8.4] glutInitWindowSize(800, 600); & glutInitWindowPosition(100, 100);
+  [8.5] glutCreateWindow("Bresenham Line Drawing Algorithm");
+  [8.6] glClearColor(1.0, 1.0, 1.0, 1.0); --> Opaque white background.
+  [8.7] gluOrtho2D(-400, 400, -300, 300); --> Origin (0, 0) at window center.
+  [8.8] glPointSize(2.0); --> 2-pixel dot size.
+  [8.9] Registers glutDisplayFunc(display), glutMouseFunc(mouse), and
+        glutKeyboardFunc(keyboard).
+  [8.10] glutMainLoop(); --> Enters infinite event loop.
+
+
+================================================================================
+SECTION 4: 50 DETAILED VIVA QUESTIONS & ANSWERS
+================================================================================
+
+Q1: Who invented Bresenham's line drawing algorithm and when?
+A: Jack E. Bresenham developed it in 1962 at IBM.
+
+Q2: What is the biggest advantage of Bresenham's algorithm over DDA?
+A: Bresenham uses purely integer addition, subtraction, and multiplication by
+   2. It completely eliminates floating-point variables, division, and round(),
+   making it faster and free from floating-point drift.
+
+Q3: What is the decision parameter (p) in Bresenham's algorithm?
+A: It is an integer error term proportional to (d1 - d2), the difference in
+   distances from the true line to the two candidate pixels. Its sign decides
+   whether to keep y the same (p < 0) or step y (p >= 0).
+
+Q4: What is the initial formula for the decision parameter p0?
+A: p0 = 2 * dy - dx (for gentle slope where dx >= dy).
+
+Q5: How do y and p update when p < 0?
+A: y stays unchanged, and p updates to p + 2 * dy.
+
+Q6: How do y and p update when p >= 0?
+A: y changes by yStep (y += yStep), and p updates to p + 2 * dy - 2 * dx.
+
+Q7: Why is "p += 2 * dy;" written OUTSIDE the "if (p >= 0)" block in your code?
+A: Because 2 * dy is added in BOTH cases. When p >= 0, "p -= 2 * dx" runs
+   inside the if and "p += 2 * dy" runs right after, producing p + 2*dy - 2*dx.
+   When p < 0, only "p += 2 * dy" runs.
+
+Q8: Why does basic Bresenham fail on steep lines (|m| > 1)?
+A: Because for |m| > 1, Y changes faster than X. Stepping X by 1 would skip
+   multiple Y rows and leave disconnected gaps in the line.
+
+Q9: How does assignment1b.cpp handle steep lines?
+A: It sets bool steep = (dy > dx). If true, it swaps X and Y for both
+   endpoints (swap(xa, ya); swap(xb, yb);), runs the gentle-slope loop, and
+   swaps them back when plotting via glVertex2i(y, xa + i).
+
+Q10: Why do we check "if (xa > xb)" and swap the two endpoints?
+A: To ensure the line is always drawn left-to-right (xa <= xb) so the loop can
+   simply step forward with (xa + i) for all lines.
+
+Q11: Why do we recalculate dx = abs(xb - xa) and dy = abs(yb - ya) AFTER the
+     two swap blocks?
+A: If steep was true, X and Y were exchanged, so the old dx and dy are now
+   reversed. Recalculating them ensures dx is always the dominant span (dx>=dy).
+
+Q12: What is the purpose of "int yStep = (ya < yb) ? 1 : -1;"?
+A: It handles upward (positive slope) and downward (negative slope) lines.
+   When ya < yb, y climbs (+1); when ya > yb, y descends (-1).
+
+Q13: Explain simply how all 8 octants are covered by just 3 checks.
+A: 8 octants = 2 (steep/gentle) * 2 (left/right) * 2 (up/down).
+   1. steep swap reduces 8 octants to 4.
+   2. xa > xb swap reduces 4 octants to 2.
+   3. yStep (+1 / -1) handles the final 2 octants in one single loop.
+
+Q14: How does your code handle a completely vertical line (xa == xb)?
+A: dx = 0 and dy > 0, so steep becomes true. Swapping X and Y turns it into a
+   horizontal computation, and plotting (y, xa + i) draws a clean vertical line.
+
+Q15: How does your code handle a completely horizontal line (ya == yb)?
+A: dy = 0, so p starts at -dx < 0 and 2*dy = 0. p remains negative on every
+   iteration, so y never changes.
+
+Q16: What happens if the user clicks the exact same pixel twice?
+A: dx = 0 and dy = 0. The loop "for (int i = 0; i <= 0; i++)" executes once for
+   i = 0, plots the single pixel safely, and terminates without any error.
+
+Q17: How is the Dotted Line implemented in assignment1b.cpp?
+A: By checking "if (i % 5 == 0)" before calling glVertex2i(), plotting 1 pixel
+   and skipping 4 pixels repeatedly.
+
+Q18: How is the Dashed Line implemented in assignment1b.cpp?
+A: By checking "if ((i / 10) % 2 == 0)" before calling glVertex2i(), plotting
+   10 consecutive pixels and skipping the next 10 repeatedly.
+
+Q19: Why must p and y still update on skipped pixels in Dotted/Dashed mode?
+A: Because p and y track the mathematical position along the line. Skipping
+   their updates would freeze y and break the slope of the line.
+
+Q20: Why is Bresenham's algorithm ideal for GPU and embedded hardware?
+A: Integer adders and bit-shifters (dy << 1 instead of 2 * dy) use far fewer
+   transistors, less power, and fewer clock cycles than floating-point units.
+
+Q21: What is the time complexity of Bresenham's algorithm?
+A: O(max(|dx|, |dy|)), linear in the pixel length of the line.
+
+Q22: What is the space complexity of Bresenham's algorithm?
+A: O(1) constant auxiliary space.
+
+Q23: Does Bresenham's algorithm suffer from aliasing ("jaggies")?
+A: Yes. Like DDA, pixels are either fully red or fully white, creating a
+   staircase look on sloped lines.
+
+Q24: Is Bresenham's line drawing algorithm symmetric?
+A: Yes. Because assignment1b.cpp normalizes endpoints left-to-right before
+   rasterizing, drawing from A to B lights up the exact same pixels as B to A.
+
+Q25: Why is <algorithm> included in assignment1b.cpp?
+A: To provide the std::swap() function used when handling steep and
+   right-to-left lines.
+
+Q26: Why is <cstdlib> included in assignment1b.cpp?
+A: To provide abs() for computing integer absolute values of dx and dy.
+
+Q27: Why does glVertex2i() have "2i" in its name?
+A: "2" specifies 2D coordinates (x, y) and "i" specifies integer (GLint) type,
+   matching the exact integer pixel coordinates produced by Bresenham.
+
+Q28: Why is GL_POINTS passed to glBegin() inside Bresenham()?
+A: Because we are manually computing and plotting each pixel of the line one
+   by one, rather than letting OpenGL draw it with GL_LINES.
+
+Q29: Where is GL_LINES used in assignment1b.cpp?
+A: Inside drawAxes() to draw the gray X-axis and Y-axis reference lines.
+
+Q30: What does glColor3f(0.5, 0.5, 0.5) mean?
+A: Sets the current OpenGL color using 3 floats (R=0.5, G=0.5, B=0.5), which
+   produces medium gray for the axes.
+
+Q31: What does glClearColor(1.0, 1.0, 1.0, 1.0) do?
+A: Configures opaque White as the screen clearing color.
+
+Q32: What does glClear(GL_COLOR_BUFFER_BIT) do?
+A: Wipes the GPU's color buffer and fills the window with the white color set
+   by glClearColor().
+
+Q33: How is the origin (0, 0) placed at the center of the 800 x 600 window?
+A: By calling gluOrtho2D(-400, 400, -300, 300), which maps X symmetrically
+   from -400 to +400 and Y from -300 to +300.
+
+Q34: Why do we use wx = x - 400 and wy = 300 - y in mouse()?
+A: GLUT mouse coordinates start at (0, 0) in the top-left with Y going down.
+   Subtracting 400 shifts X to the center; (300 - y) shifts Y to the center
+   and flips it upward to match gluOrtho2D.
+
+Q35: Why is GLUT_SINGLE used instead of GLUT_DOUBLE?
+A: Because the drawing is static (updates only on click or key press), so a
+   single frame buffer flushed via glFlush() is sufficient and simple.
+
+Q36: What does glFlush() do at the end of display()?
+A: Forces all queued OpenGL drawing commands to execute immediately so they
+   appear on the single-buffered window.
+
+Q37: What does glutPostRedisplay() do?
+A: Tells GLUT that the window needs to be redrawn so GLUT triggers display()
+   on the next cycle of glutMainLoop().
+
+Q38: What is the role of glutInit(&argc, argv)?
+A: Initializes GLUT and inspects command-line flags; &argc lets GLUT modify
+   the argument count if it consumes flags, while argv is already a pointer.
+
+Q39: What does glPointSize(2.0) do?
+A: Sets the pixel diameter of every GL_POINTS vertex to 2.0 screen pixels so
+   the red line stands out clearly.
+
+Q40: Why do we check "button == GLUT_LEFT_BUTTON && state == GLUT_DOWN"?
+A: To react only to left-button presses and avoid recording a second click
+   when the button is released (GLUT_UP).
+
+Q41: How does clickCount control drawing in assignment1b.cpp?
+A: Click 1 sets (startX, startY) and clickCount = 1. Click 2 sets (endX, endY)
+   and clickCount = 2. Inside display(), Bresenham() only runs when
+   clickCount == 2.
+
+Q42: What happens when you press 'r' or 'R'?
+A: keyboard() sets clickCount = 0 and calls glutPostRedisplay(). display()
+   clears the screen and redraws only the axes, erasing the previous line.
+
+Q43: What happens if you press '2' while a Simple Line is already on screen?
+A: keyboard() sets lineStyle = 2, resets clickCount = 0, prints "Dotted Line
+   Selected", and redraws a blank gridded screen ready for two new clicks.
+
+Q44: What happens if you enter an invalid number (like 9) in the console menu?
+A: The validation check sets lineStyle = 1 and prints "Invalid choice!
+   Selecting Simple Line."
+
+Q45: What is the difference between glutKeyboardFunc and glutSpecialFunc?
+A: glutKeyboardFunc detects standard ASCII keys ('1', '2', '3', 'r').
+   glutSpecialFunc detects non-ASCII keys like Arrow keys and F1-F12.
+
+Q46: What does glutMainLoop() do?
+A: Starts GLUT's infinite event-processing loop, listening for OS redraws,
+   mouse clicks, and keyboard input and dispatching them to our callbacks.
+
+Q47: Why must drawAxes() be called inside display() every single time?
+A: Because glClear(GL_COLOR_BUFFER_BIT) erases the entire screen to white at
+   the start of every display() call.
+
+Q48: What happens if you call glVertex2i() outside glBegin() and glEnd()?
+A: OpenGL ignores the vertex call (undefined/invalid operation) because
+   vertices only form graphics inside a primitive block.
+
+Q49: How is Bresenham's algorithm related to the Midpoint Line Algorithm?
+A: They are mathematically equivalent; testing the implicit line equation at
+   the midpoint (xk + 1, yk + 0.5) yields the exact same p0 = 2*dy - dx and
+   update formulas.
+
+Q50: Trace the first 3 pixels of Bresenham(0, 0, 5, 2).
+A: dx = 5, dy = 2, steep = false, yStep = +1, 2*dy = 4, 2*dx = 10,
+   p = 4 - 5 = -1.
+   --> i = 0: plot (0, 0). p = -1 < 0  --> y = 0, p = -1 + 4 = 3
+   --> i = 1: plot (1, 0). p = 3 >= 0  --> y = 1, p = 3 - 10 + 4 = -3
+   --> i = 2: plot (2, 1). p = -3 < 0  --> y = 1, p = -3 + 4 = 1
